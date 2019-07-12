@@ -1,0 +1,16 @@
+BasedOnStyle: Google
+
+# For calculating line lengths.
+IndentWidth: 2
+TabWidth: 2
+
+UseTab: ForIndentation
+ColumnLimit: 100
+
+AlignOperands: true
+AllowShortFunctionsOnASingleLine: false
+BinPackArguments: false
+BinPackParameters: false
+BreakBeforeBinaryOperators: NonAssignment
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
+Standard: Cpp11
