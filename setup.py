@@ -1,6 +1,11 @@
 from distutils.core import setup, Extension
 
-_quickjs = Extension('_quickjs', sources=['module.c'])
+_quickjs = Extension('_quickjs',
+                     define_macros=[('CONFIG_VERSION', '"2019-07-09"')],
+                     sources=[
+                         'module.c', 'third-party/quickjs.c', 'third-party/cutils.c',
+                         'third-party/libregexp.c', 'third-party/libunicode.c'
+                     ])
 
 setup(name='quickjs',
       version='1.0',
