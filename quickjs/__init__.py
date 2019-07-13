@@ -6,3 +6,4 @@ def test():
 
 
 Context = _quickjs.Context
+JSException = _quickjs.JSException

@@ -37,3 +37,16 @@ class Context(unittest.TestCase):
     def test_context_between_calls(self):
         self.context.eval("x = 40; y = 2;")
         self.assertEqual(self.context.eval("x + y"), 42)
+
+    def test_function(self):
+        self.context.eval("""
+        function special(x) {
+            return 40 + x;
+        }
+        """)
+        self.assertEqual(self.context.eval("special(2)"), 42)
+
+
+    def test_error(self):
+        with self.assertRaisesRegex(quickjs.JSException, "ReferenceError: missing is not defined"):
+            self.context.eval("missing + missing")
