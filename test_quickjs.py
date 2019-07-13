@@ -40,19 +40,36 @@ class Context(unittest.TestCase):
 
     def test_function(self):
         self.context.eval("""
-        function special(x) {
-            return 40 + x;
-        }
-        """)
+            function special(x) {
+                return 40 + x;
+            }
+            """)
         self.assertEqual(self.context.eval("special(2)"), 42)
 
     def test_function_is_object(self):
         f = self.context.eval("""
-        a = function(x) {
-            return 40 + x;
-        }
-        """)
+            a = function(x) {
+                return 40 + x;
+            }
+            """)
         self.assertIsInstance(f, quickjs.Object)
+
+    def test_function_call(self):
+        f = self.context.eval("""
+            f = function(x) {
+                return 40 + x;
+            }
+            """)
+        self.assertEqual(f(2), 42)
+
+    def test_function_call_unsupported_arg(self):
+        f = self.context.eval("""
+            f = function(x) {
+                return 40 + x;
+            }
+            """)
+        with self.assertRaisesRegex(ValueError, "Unsupported type"):
+            self.assertEqual(f({}), 42)
 
     def test_error(self):
         with self.assertRaisesRegex(quickjs.JSException, "ReferenceError: missing is not defined"):

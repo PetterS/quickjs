@@ -25,18 +25,42 @@ static PyObject *object_new(PyTypeObject *type, PyObject *args, PyObject *kwds) 
 }
 
 static void object_dealloc(ObjectData *self) {
-	Py_TYPE(self)->tp_free((PyObject *)self);
-}
-
-static PyObject *object_call(ObjectData *self, PyObject *args) {
 	if (self->context) {
 		JS_FreeValue(self->context, self->object);
 	}
-	Py_RETURN_NONE;
+	Py_TYPE(self)->tp_free((PyObject *)self);
+}
+
+static PyObject *object_call(ObjectData *self, PyObject *args, PyObject *kwds) {
+	if (self->context == NULL) {
+		Py_RETURN_NONE;
+	}
+	const int nargs = PyTuple_Size(args);
+	for (int i = 0; i < nargs; ++i) {
+		PyObject *item = PyTuple_GetItem(args, i);
+		if (PyLong_Check(item)) {
+		} else {
+			PyErr_Format(PyExc_ValueError, "Unsupported type when calling quickjs object");
+			return NULL;
+		}
+	}
+	JSValueConst *jsargs = malloc(nargs * sizeof(JSValueConst));
+	for (int i = 0; i < nargs; ++i) {
+		PyObject *item = PyTuple_GetItem(args, i);
+		if (PyLong_Check(item)) {
+			jsargs[i] = JS_MKVAL(JS_TAG_INT, PyLong_AsLong(item));
+		}
+	}
+	JSValue value = JS_Call(self->context, self->object, JS_NULL, 1, jsargs);
+	for (int i = 0; i < nargs; ++i) {
+		JS_FreeValue(self->context, jsargs[i]);
+	}
+	free(jsargs);
+	return quickjs_to_python(self->context, value);
 }
 
 static PyMethodDef object_methods[] = {
-    {"call", (PyCFunction)object_call, METH_VARARGS, "Calls a JS function."}, {NULL} /* Sentinel */
+    {NULL} /* Sentinel */
 };
 
 static PyTypeObject Object = {PyVarObject_HEAD_INIT(NULL, 0).tp_name = "_quickjs.Object",
@@ -46,6 +70,7 @@ static PyTypeObject Object = {PyVarObject_HEAD_INIT(NULL, 0).tp_name = "_quickjs
                               .tp_flags = Py_TPFLAGS_DEFAULT,
                               .tp_new = object_new,
                               .tp_dealloc = (destructor)object_dealloc,
+                              .tp_call = object_call,
                               .tp_methods = object_methods};
 
 static PyObject *quickjs_to_python(JSContext *context, JSValue value) {
