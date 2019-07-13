@@ -51,9 +51,7 @@ static PyObject *object_call(ObjectData *self, PyObject *args, PyObject *kwds) {
 		if (PyLong_Check(item)) {
 			jsargs[i] = JS_MKVAL(JS_TAG_INT, PyLong_AsLong(item));
 		} else if (PyUnicode_Check(item)) {
-			const char *cstring = PyUnicode_AsUTF8(item);
-			jsargs[i] = JS_NewString(self->context, cstring);
-			PyMem_Free(cstring);
+			jsargs[i] = JS_NewString(self->context, PyUnicode_AsUTF8(item));
 		}
 	}
 	JSValue value = JS_Call(self->context, self->object, JS_NULL, nargs, jsargs);
