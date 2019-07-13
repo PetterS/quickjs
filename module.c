@@ -56,7 +56,7 @@ static PyObject *object_call(ObjectData *self, PyObject *args, PyObject *kwds) {
 			PyMem_Free(cstring);
 		}
 	}
-	JSValue value = JS_Call(self->context, self->object, JS_NULL, 1, jsargs);
+	JSValue value = JS_Call(self->context, self->object, JS_NULL, nargs, jsargs);
 	for (int i = 0; i < nargs; ++i) {
 		JS_FreeValue(self->context, jsargs[i]);
 	}

@@ -62,13 +62,29 @@ class Context(unittest.TestCase):
             """)
         self.assertEqual(f(2), 42)
 
-    def test_function_call_str(self):
+    def test_function_call_int_two_args(self):
         f = self.context.eval("""
-            f = function(a) {
-                return a + " hej";
+            f = function(x, y) {
+                return 40 + x + y;
             }
             """)
-        self.assertEqual(f("1"), "1 hej")
+        self.assertEqual(f(3, -1), 42)
+
+    # def test_function_call_str(self):
+    #     f = self.context.eval("""
+    #         f = function(a) {
+    #             return a + " hej";
+    #         }
+    #         """)
+    #     self.assertEqual(f("1"), "1 hej")
+
+    # def test_function_call_str_three_args(self):
+    #     f = self.context.eval("""
+    #         f = function(a, b, c) {
+    #             return a + " hej " + b + " ho " + c;
+    #         }
+    #         """)
+    #     self.assertEqual(f("1", "2", "3"), "1 hej 2 ho 3")
 
     def test_function_call_unsupported_arg(self):
         f = self.context.eval("""
