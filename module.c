@@ -2,10 +2,54 @@
 
 #include "third-party/quickjs.h"
 
-static PyObject* JSException = NULL;
+static PyObject *JSException = NULL;
+static PyObject *quickjs_to_python(JSContext *context, JSValue value);
 
-static PyObject* quickjs_to_python(JSContext* context, JSValue value) {
-    int tag = JS_VALUE_GET_TAG(value);
+//
+// Object type
+//
+
+typedef struct {
+	PyObject_HEAD;
+	JSContext *context;
+	JSValue object;
+} ObjectData;
+
+static PyObject *object_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
+	ObjectData *self;
+	self = (ObjectData *)type->tp_alloc(type, 0);
+	if (self != NULL) {
+		self->context = NULL;
+	}
+	return (PyObject *)self;
+}
+
+static void object_dealloc(ObjectData *self) {
+	Py_TYPE(self)->tp_free((PyObject *)self);
+}
+
+static PyObject *object_call(ObjectData *self, PyObject *args) {
+	if (self->context) {
+		JS_FreeValue(self->context, self->object);
+	}
+	Py_RETURN_NONE;
+}
+
+static PyMethodDef object_methods[] = {
+    {"call", (PyCFunction)object_call, METH_VARARGS, "Calls a JS function."}, {NULL} /* Sentinel */
+};
+
+static PyTypeObject Object = {PyVarObject_HEAD_INIT(NULL, 0).tp_name = "_quickjs.Object",
+                              .tp_doc = "Quickjs object",
+                              .tp_basicsize = sizeof(ObjectData),
+                              .tp_itemsize = 0,
+                              .tp_flags = Py_TPFLAGS_DEFAULT,
+                              .tp_new = object_new,
+                              .tp_dealloc = (destructor)object_dealloc,
+                              .tp_methods = object_methods};
+
+static PyObject *quickjs_to_python(JSContext *context, JSValue value) {
+	int tag = JS_VALUE_GET_TAG(value);
 	PyObject *return_value = NULL;
 
 	if (tag == JS_TAG_INT) {
@@ -19,21 +63,27 @@ static PyObject* quickjs_to_python(JSContext* context, JSValue value) {
 	} else if (tag == JS_TAG_UNINITIALIZED) {
 		return_value = Py_None;
 	} else if (tag == JS_TAG_EXCEPTION) {
-        JSValue exception = JS_GetException(context);
-        JSValue error_string = JS_ToString(context, exception);
-        const char *cstring = JS_ToCString(context, error_string);
-        PyErr_Format(JSException, "%s", cstring);
+		JSValue exception = JS_GetException(context);
+		JSValue error_string = JS_ToString(context, exception);
+		const char *cstring = JS_ToCString(context, error_string);
+		PyErr_Format(JSException, "%s", cstring);
 		JS_FreeCString(context, cstring);
-        JS_FreeValue(context, error_string);
-        JS_FreeValue(context, exception);
+		JS_FreeValue(context, error_string);
+		JS_FreeValue(context, exception);
 	} else if (tag == JS_TAG_FLOAT64) {
 		return_value = Py_BuildValue("d", JS_VALUE_GET_FLOAT64(value));
 	} else if (tag == JS_TAG_STRING) {
 		const char *cstring = JS_ToCString(context, value);
 		return_value = Py_BuildValue("s", cstring);
 		JS_FreeCString(context, cstring);
+	} else if (tag == JS_TAG_OBJECT) {
+		return_value = PyObject_CallObject((PyObject *)&Object, NULL);
+		ObjectData *object = (ObjectData *)return_value;
+		object->context = context;
+		object->object = value;
+		return return_value;
 	} else {
-		// TODO: Raise exception.
+		PyErr_Format(PyExc_ValueError, "Unknown quickjs tag: %d", tag);
 	}
 
 	JS_FreeValue(context, value);
@@ -49,6 +99,9 @@ static PyObject *test(PyObject *self, PyObject *args) {
 
 struct module_state {};
 
+//
+// Context type
+//
 typedef struct {
 	PyObject_HEAD JSRuntime *runtime;
 	JSContext *context;
@@ -76,7 +129,7 @@ static PyObject *context_eval(ContextData *self, PyObject *args) {
 		return NULL;
 	}
 	JSValue value = JS_Eval(self->context, code, strlen(code), "<input>", JS_EVAL_TYPE_GLOBAL);
-    return quickjs_to_python(self->context, value);
+	return quickjs_to_python(self->context, value);
 }
 
 static PyMethodDef context_methods[] = {
@@ -110,19 +163,24 @@ PyMODINIT_FUNC PyInit__quickjs(void) {
 	if (PyType_Ready(&Context) < 0) {
 		return NULL;
 	}
+	if (PyType_Ready(&Object) < 0) {
+		return NULL;
+	}
 
 	PyObject *module = PyModule_Create(&moduledef);
 	if (module == NULL) {
 		return NULL;
 	}
 
-    JSException = PyErr_NewException("_quickjs.JSException", NULL, NULL);
-    if (JSException == NULL) {
-        return NULL;
-    }
+	JSException = PyErr_NewException("_quickjs.JSException", NULL, NULL);
+	if (JSException == NULL) {
+		return NULL;
+	}
 
 	Py_INCREF(&Context);
 	PyModule_AddObject(module, "Context", (PyObject *)&Context);
-    PyModule_AddObject(module, "JSException", JSException);
+	Py_INCREF(&Object);
+	PyModule_AddObject(module, "Object", (PyObject *)&Object);
+	PyModule_AddObject(module, "JSException", JSException);
 	return module;
 }

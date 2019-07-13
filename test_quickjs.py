@@ -46,6 +46,13 @@ class Context(unittest.TestCase):
         """)
         self.assertEqual(self.context.eval("special(2)"), 42)
 
+    def test_function_is_object(self):
+        f = self.context.eval("""
+        a = function(x) {
+            return 40 + x;
+        }
+        """)
+        self.assertIsInstance(f, quickjs.Object)
 
     def test_error(self):
         with self.assertRaisesRegex(quickjs.JSException, "ReferenceError: missing is not defined"):

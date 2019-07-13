@@ -6,4 +6,5 @@ def test():
 
 
 Context = _quickjs.Context
+Object = _quickjs.Object
 JSException = _quickjs.JSException
