@@ -39,6 +39,7 @@ static PyObject *object_call(ObjectData *self, PyObject *args, PyObject *kwds) {
 	for (int i = 0; i < nargs; ++i) {
 		PyObject *item = PyTuple_GetItem(args, i);
 		if (PyLong_Check(item)) {
+		} else if (PyUnicode_Check(item)) {
 		} else {
 			PyErr_Format(PyExc_ValueError, "Unsupported type when calling quickjs object");
 			return NULL;
@@ -49,6 +50,10 @@ static PyObject *object_call(ObjectData *self, PyObject *args, PyObject *kwds) {
 		PyObject *item = PyTuple_GetItem(args, i);
 		if (PyLong_Check(item)) {
 			jsargs[i] = JS_MKVAL(JS_TAG_INT, PyLong_AsLong(item));
+		} else if (PyUnicode_Check(item)) {
+			const char *cstring = PyUnicode_AsUTF8(item);
+			jsargs[i] = JS_NewString(self->context, cstring);
+			PyMem_Free(cstring);
 		}
 	}
 	JSValue value = JS_Call(self->context, self->object, JS_NULL, 1, jsargs);

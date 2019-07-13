@@ -54,13 +54,21 @@ class Context(unittest.TestCase):
             """)
         self.assertIsInstance(f, quickjs.Object)
 
-    def test_function_call(self):
+    def test_function_call_int(self):
         f = self.context.eval("""
             f = function(x) {
                 return 40 + x;
             }
             """)
         self.assertEqual(f(2), 42)
+
+    def test_function_call_str(self):
+        f = self.context.eval("""
+            f = function(a) {
+                return a + " hej";
+            }
+            """)
+        self.assertEqual(f("1"), "1 hej")
 
     def test_function_call_unsupported_arg(self):
         f = self.context.eval("""
