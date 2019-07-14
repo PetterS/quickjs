@@ -96,6 +96,18 @@ class Object(unittest.TestCase):
             """)
         self.assertEqual(f("1", "2", "3"), "1 hej 2 ho 3")
 
+    def test_function_call_object(self):
+        d = self.context.eval("d = {data: 42};")
+        f = self.context.eval("""
+            f = function(d) {
+                return d.data;
+            }
+            """)
+        self.assertEqual(f(d), 42)
+        # Try again to make sure refcounting works.
+        self.assertEqual(f(d), 42)
+        self.assertEqual(f(d), 42)
+
     def test_function_call_unsupported_arg(self):
         f = self.context.eval("""
             f = function(x) {
