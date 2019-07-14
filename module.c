@@ -62,8 +62,20 @@ static PyObject *object_call(ObjectData *self, PyObject *args, PyObject *kwds) {
 	return quickjs_to_python(self->context, value);
 }
 
+static PyObject *object_json(ObjectData *self) {
+	JSValue global = JS_GetGlobalObject(self->context);
+	JSValue JSON = JS_GetPropertyStr(self->context, global, "JSON");
+	JSValue stringify = JS_GetPropertyStr(self->context, JSON, "stringify");
+	JSValueConst args[1] = {self->object};
+	JSValue json_string = JS_Call(self->context, stringify, JSON, 1, args);
+	JS_FreeValue(self->context, global);
+	JS_FreeValue(self->context, JSON);
+	JS_FreeValue(self->context, stringify);
+	return quickjs_to_python(self->context, json_string);
+}
+
 static PyMethodDef object_methods[] = {
-    {NULL} /* Sentinel */
+    {"json", object_json, METH_NOARGS, "Converts to a JSON string."}, {NULL} /* Sentinel */
 };
 
 static PyTypeObject Object = {PyVarObject_HEAD_INIT(NULL, 0).tp_name = "_quickjs.Object",

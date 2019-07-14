@@ -1,3 +1,4 @@
+import json
 import unittest
 
 import quickjs
@@ -45,6 +46,15 @@ class Context(unittest.TestCase):
             }
             """)
         self.assertEqual(self.context.eval("special(2)"), 42)
+
+    def test_error(self):
+        with self.assertRaisesRegex(quickjs.JSException, "ReferenceError: missing is not defined"):
+            self.context.eval("missing + missing")
+
+
+class Object(unittest.TestCase):
+    def setUp(self):
+        self.context = quickjs.Context()
 
     def test_function_is_object(self):
         f = self.context.eval("""
@@ -95,6 +105,6 @@ class Context(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Unsupported type"):
             self.assertEqual(f({}), 42)
 
-    def test_error(self):
-        with self.assertRaisesRegex(quickjs.JSException, "ReferenceError: missing is not defined"):
-            self.context.eval("missing + missing")
+    def test_json(self):
+        d = self.context.eval("d = {data: 42};")
+        self.assertEqual(json.loads(d.json()), {"data": 42})
