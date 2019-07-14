@@ -2,19 +2,23 @@
 
 #include "third-party/quickjs.h"
 
+typedef struct {
+	PyObject_HEAD JSRuntime *runtime;
+	JSContext *context;
+} ContextData;
+
+typedef struct {
+	PyObject_HEAD;
+	ContextData *context;
+	JSValue object;
+} ObjectData;
+
 static PyObject *JSException = NULL;
-static PyObject *quickjs_to_python(JSContext *context, JSValue value);
+static PyObject *quickjs_to_python(ContextData *context_obj, JSValue value);
 
 //
 // Object type
 //
-
-typedef struct {
-	PyObject_HEAD;
-	JSContext *context;
-	JSValue object;
-} ObjectData;
-
 static PyObject *object_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
 	ObjectData *self;
 	self = (ObjectData *)type->tp_alloc(type, 0);
@@ -26,7 +30,8 @@ static PyObject *object_new(PyTypeObject *type, PyObject *args, PyObject *kwds) 
 
 static void object_dealloc(ObjectData *self) {
 	if (self->context) {
-		JS_FreeValue(self->context, self->object);
+		JS_FreeValue(self->context->context, self->object);
+		Py_DECREF(self->context);
 	}
 	Py_TYPE(self)->tp_free((PyObject *)self);
 }
@@ -34,19 +39,21 @@ static void object_dealloc(ObjectData *self) {
 static PyObject *object_call(ObjectData *self, PyObject *args, PyObject *kwds);
 
 static PyObject *object_json(ObjectData *self) {
-	JSValue global = JS_GetGlobalObject(self->context);
-	JSValue JSON = JS_GetPropertyStr(self->context, global, "JSON");
-	JSValue stringify = JS_GetPropertyStr(self->context, JSON, "stringify");
+	JSContext *context = self->context->context;
+	JSValue global = JS_GetGlobalObject(context);
+	JSValue JSON = JS_GetPropertyStr(context, global, "JSON");
+	JSValue stringify = JS_GetPropertyStr(context, JSON, "stringify");
 	JSValueConst args[1] = {self->object};
-	JSValue json_string = JS_Call(self->context, stringify, JSON, 1, args);
-	JS_FreeValue(self->context, global);
-	JS_FreeValue(self->context, JSON);
-	JS_FreeValue(self->context, stringify);
+	JSValue json_string = JS_Call(context, stringify, JSON, 1, args);
+	JS_FreeValue(context, global);
+	JS_FreeValue(context, JSON);
+	JS_FreeValue(context, stringify);
 	return quickjs_to_python(self->context, json_string);
 }
 
 static PyMethodDef object_methods[] = {
-    {"json", object_json, METH_NOARGS, "Converts to a JSON string."}, {NULL} /* Sentinel */
+    {"json", (PyCFunction)object_json, METH_NOARGS, "Converts to a JSON string."},
+    {NULL} /* Sentinel */
 };
 
 static PyTypeObject Object = {PyVarObject_HEAD_INIT(NULL, 0).tp_name = "_quickjs.Object",
@@ -68,7 +75,7 @@ static PyObject *object_call(ObjectData *self, PyObject *args, PyObject *kwds) {
 		PyObject *item = PyTuple_GetItem(args, i);
 		if (PyLong_Check(item)) {
 		} else if (PyUnicode_Check(item)) {
-		} else if (PyObject_IsInstance(item, (PyObject*)&Object)) {
+		} else if (PyObject_IsInstance(item, (PyObject *)&Object)) {
 		} else {
 			PyErr_Format(PyExc_ValueError, "Unsupported type when calling quickjs object");
 			return NULL;
@@ -80,20 +87,21 @@ static PyObject *object_call(ObjectData *self, PyObject *args, PyObject *kwds) {
 		if (PyLong_Check(item)) {
 			jsargs[i] = JS_MKVAL(JS_TAG_INT, PyLong_AsLong(item));
 		} else if (PyUnicode_Check(item)) {
-			jsargs[i] = JS_NewString(self->context, PyUnicode_AsUTF8(item));
-		} else if (PyObject_IsInstance(item, (PyObject*)&Object)) {
-			jsargs[i] = JS_DupValue(self->context, ((ObjectData *)item)->object);
+			jsargs[i] = JS_NewString(self->context->context, PyUnicode_AsUTF8(item));
+		} else if (PyObject_IsInstance(item, (PyObject *)&Object)) {
+			jsargs[i] = JS_DupValue(self->context->context, ((ObjectData *)item)->object);
 		}
 	}
-	JSValue value = JS_Call(self->context, self->object, JS_NULL, nargs, jsargs);
+	JSValue value = JS_Call(self->context->context, self->object, JS_NULL, nargs, jsargs);
 	for (int i = 0; i < nargs; ++i) {
-		JS_FreeValue(self->context, jsargs[i]);
+		JS_FreeValue(self->context->context, jsargs[i]);
 	}
 	free(jsargs);
 	return quickjs_to_python(self->context, value);
 }
 
-static PyObject *quickjs_to_python(JSContext *context, JSValue value) {
+static PyObject *quickjs_to_python(ContextData *context_obj, JSValue value) {
+	JSContext *context = context_obj->context;
 	int tag = JS_VALUE_GET_TAG(value);
 	PyObject *return_value = NULL;
 
@@ -122,7 +130,8 @@ static PyObject *quickjs_to_python(JSContext *context, JSValue value) {
 	} else if (tag == JS_TAG_OBJECT) {
 		return_value = PyObject_CallObject((PyObject *)&Object, NULL);
 		ObjectData *object = (ObjectData *)return_value;
-		object->context = context;
+		Py_INCREF(context_obj);
+		object->context = context_obj;
 		object->object = JS_DupValue(context, value);
 	} else {
 		PyErr_Format(PyExc_ValueError, "Unknown quickjs tag: %d", tag);
@@ -144,11 +153,6 @@ struct module_state {};
 //
 // Context type
 //
-typedef struct {
-	PyObject_HEAD JSRuntime *runtime;
-	JSContext *context;
-} ContextData;
-
 static PyObject *context_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
 	ContextData *self;
 	self = (ContextData *)type->tp_alloc(type, 0);
@@ -171,7 +175,7 @@ static PyObject *context_eval(ContextData *self, PyObject *args) {
 		return NULL;
 	}
 	JSValue value = JS_Eval(self->context, code, strlen(code), "<input>", JS_EVAL_TYPE_GLOBAL);
-	return quickjs_to_python(self->context, value);
+	return quickjs_to_python(self, value);
 }
 
 static PyObject *context_get(ContextData *self, PyObject *args) {
@@ -182,7 +186,7 @@ static PyObject *context_get(ContextData *self, PyObject *args) {
 	JSValue global = JS_GetGlobalObject(self->context);
 	JSValue value = JS_GetPropertyStr(self->context, global, name);
 	JS_FreeValue(self->context, global);
-	return quickjs_to_python(self->context, value);
+	return quickjs_to_python(self, value);
 }
 
 static PyMethodDef context_methods[] = {

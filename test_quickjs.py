@@ -57,6 +57,21 @@ class Context(unittest.TestCase):
         with self.assertRaisesRegex(quickjs.JSException, "ReferenceError: missing is not defined"):
             self.context.eval("missing + missing")
 
+    def test_lifetime(self):
+        def get_f():
+            context = quickjs.Context()
+            f = context.eval("""
+            a = function(x) {
+                return 40 + x;
+            }
+            """)
+            return f
+
+        f = get_f()
+        self.assertTrue(f)
+        # The context has left the scope after f. f needs to keep the context alive for the
+        # its lifetime. Otherwise, we will get problems.
+
 
 class Object(unittest.TestCase):
     def setUp(self):
@@ -85,7 +100,6 @@ class Object(unittest.TestCase):
             }
             """)
         self.assertEqual(f(3, -1), 42)
-
 
     def test_function_call_many_times(self):
         n = 1000
