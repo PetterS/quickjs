@@ -153,3 +153,15 @@ class Object(unittest.TestCase):
     def test_json(self):
         d = self.context.eval("d = {data: 42};")
         self.assertEqual(json.loads(d.json()), {"data": 42})
+
+
+class FunctionTest(unittest.TestCase):
+    def test_adder(self):
+        f = quickjs.Function("adder", """
+            function adder(x, y) {
+                return x + y;
+            }
+            """)
+        self.assertEqual(f(1, 1), 2)
+        self.assertEqual(f(100, 200), 300)
+        self.assertEqual(f("a", "b"), "ab")
