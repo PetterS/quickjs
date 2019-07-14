@@ -68,7 +68,7 @@ static PyObject *object_call(ObjectData *self, PyObject *args, PyObject *kwds) {
 		PyObject *item = PyTuple_GetItem(args, i);
 		if (PyLong_Check(item)) {
 		} else if (PyUnicode_Check(item)) {
-		} else if (PyObject_IsInstance(item, &Object)) {
+		} else if (PyObject_IsInstance(item, (PyObject*)&Object)) {
 		} else {
 			PyErr_Format(PyExc_ValueError, "Unsupported type when calling quickjs object");
 			return NULL;
@@ -81,7 +81,7 @@ static PyObject *object_call(ObjectData *self, PyObject *args, PyObject *kwds) {
 			jsargs[i] = JS_MKVAL(JS_TAG_INT, PyLong_AsLong(item));
 		} else if (PyUnicode_Check(item)) {
 			jsargs[i] = JS_NewString(self->context, PyUnicode_AsUTF8(item));
-		} else if (PyObject_IsInstance(item, &Object)) {
+		} else if (PyObject_IsInstance(item, (PyObject*)&Object)) {
 			jsargs[i] = JS_DupValue(self->context, ((ObjectData *)item)->object);
 		}
 	}
@@ -105,8 +105,6 @@ static PyObject *quickjs_to_python(JSContext *context, JSValue value) {
 		return_value = Py_None;
 	} else if (tag == JS_TAG_UNDEFINED) {
 		return_value = Py_None;
-	} else if (tag == JS_TAG_UNINITIALIZED) {
-		return_value = Py_None;
 	} else if (tag == JS_TAG_EXCEPTION) {
 		JSValue exception = JS_GetException(context);
 		JSValue error_string = JS_ToString(context, exception);
@@ -125,8 +123,7 @@ static PyObject *quickjs_to_python(JSContext *context, JSValue value) {
 		return_value = PyObject_CallObject((PyObject *)&Object, NULL);
 		ObjectData *object = (ObjectData *)return_value;
 		object->context = context;
-		object->object = value;
-		return return_value;
+		object->object = JS_DupValue(context, value);
 	} else {
 		PyErr_Format(PyExc_ValueError, "Unknown quickjs tag: %d", tag);
 	}
@@ -177,8 +174,20 @@ static PyObject *context_eval(ContextData *self, PyObject *args) {
 	return quickjs_to_python(self->context, value);
 }
 
+static PyObject *context_get(ContextData *self, PyObject *args) {
+	const char *name;
+	if (!PyArg_ParseTuple(args, "s", &name)) {
+		return NULL;
+	}
+	JSValue global = JS_GetGlobalObject(self->context);
+	JSValue value = JS_GetPropertyStr(self->context, global, name);
+	JS_FreeValue(self->context, global);
+	return quickjs_to_python(self->context, value);
+}
+
 static PyMethodDef context_methods[] = {
     {"eval", (PyCFunction)context_eval, METH_VARARGS, "Evaluates a Javascript string."},
+    {"get", (PyCFunction)context_get, METH_VARARGS, "Gets a Javascript global variable."},
     {NULL} /* Sentinel */
 };
 

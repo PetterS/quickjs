@@ -47,6 +47,12 @@ class Context(unittest.TestCase):
             """)
         self.assertEqual(self.context.eval("special(2)"), 42)
 
+    def test_get(self):
+        self.context.eval("x = 42; y = 'foo';")
+        self.assertEqual(self.context.get("x"), 42)
+        self.assertEqual(self.context.get("y"), "foo")
+        self.assertEqual(self.context.get("z"), None)
+
     def test_error(self):
         with self.assertRaisesRegex(quickjs.JSException, "ReferenceError: missing is not defined"):
             self.context.eval("missing + missing")
@@ -79,6 +85,19 @@ class Object(unittest.TestCase):
             }
             """)
         self.assertEqual(f(3, -1), 42)
+
+
+    def test_function_call_many_times(self):
+        n = 1000
+        f = self.context.eval("""
+            f = function(x, y) {
+                return x + y;
+            }
+            """)
+        s = 0
+        for i in range(n):
+            s += f(1, 1)
+        self.assertEqual(s, 2 * n)
 
     def test_function_call_str(self):
         f = self.context.eval("""
