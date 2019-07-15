@@ -21,7 +21,7 @@ upload-test: distribute
 	$(PYTHON) -m twine upload --repository-url https://test.pypi.org/legacy/ dist/*
 
 upload: distribute
-	$(PYTHON) -m twine upload dist/* quickjs.egg-info/ 
+	$(PYTHON) -m twine upload dist/*
 
 clean:
 	rm -rf build/ dist/ 
