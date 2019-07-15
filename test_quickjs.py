@@ -73,6 +73,18 @@ class Context(unittest.TestCase):
         # The context has left the scope after f. f needs to keep the context alive for the
         # its lifetime. Otherwise, we will get problems.
 
+    def test_memory_limit(self):
+        code = """
+            let arr = [];
+            for (let i = 0; i < 1000; ++i) {
+                arr.push(i);
+            }
+        """
+        self.context.eval(code)
+        self.context.set_memory_limit(1000)
+        with self.assertRaisesRegex(quickjs.JSException, "null"):
+            self.context.eval(code)
+
 
 class Object(unittest.TestCase):
     def setUp(self):

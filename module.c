@@ -258,10 +258,23 @@ static PyObject *context_get(ContextData *self, PyObject *args) {
 	return quickjs_to_python(self, value);
 }
 
+// _quickjs.Context.set_memory_limit
+//
+// Retrieves a global variable from the JS context.
+static PyObject *context_set_memory_limit(ContextData *self, PyObject *args) {
+	Py_ssize_t limit;
+	if (!PyArg_ParseTuple(args, "n", &limit)) {
+		return NULL;
+	}
+	JS_SetMemoryLimit(self->runtime, limit);
+	Py_RETURN_NONE;
+}
+
 // All methods of the _quickjs.Context class.
 static PyMethodDef context_methods[] = {
     {"eval", (PyCFunction)context_eval, METH_VARARGS, "Evaluates a Javascript string."},
     {"get", (PyCFunction)context_get, METH_VARARGS, "Gets a Javascript global variable."},
+	{"set_memory_limit", (PyCFunction)context_set_memory_limit, METH_VARARGS, "Sets the memory limit in bytes."},
     {NULL} /* Sentinel */
 };
 
