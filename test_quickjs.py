@@ -157,7 +157,8 @@ class Object(unittest.TestCase):
 
 class FunctionTest(unittest.TestCase):
     def test_adder(self):
-        f = quickjs.Function("adder", """
+        f = quickjs.Function(
+            "adder", """
             function adder(x, y) {
                 return x + y;
             }

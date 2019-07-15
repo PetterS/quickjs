@@ -1,3 +1,4 @@
+import setuptools
 from distutils.core import setup, Extension
 
 _quickjs = Extension('_quickjs',
@@ -8,7 +9,7 @@ _quickjs = Extension('_quickjs',
                      ])
 
 setup(name='quickjs',
-      version='1.0',
+      version='1.0.2',
       description='Wrapping the quickjs C library.',
       packages=["quickjs"],
       ext_modules=[_quickjs])

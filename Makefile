@@ -1,16 +1,27 @@
+PYTHON = python3.6
 
 test: install
-	python3 -m unittest
+	$(PYTHON) -m unittest
 
 install: build
-	python3 setup.py install --user
+	$(PYTHON) setup.py install --user
 
 build: Makefile module.c third-party/quickjs.c third-party/quickjs.h
-	python3 setup.py build
+	$(PYTHON) setup.py build
 
 format:
-	python3 -m yapf -i -r --style .style.yapf  .
+	$(PYTHON) -m yapf -i -r --style .style.yapf  .
 	clang-format-7 -i module.c
 
+distribute: test
+	rm -rf dist/
+	$(PYTHON) setup.py sdist
+
+upload-test: distribute
+	$(PYTHON) -m twine upload --repository-url https://test.pypi.org/legacy/ dist/*
+
+upload: distribute
+	$(PYTHON) -m twine upload dist/* quickjs.egg-info/ 
+
 clean:
-	rm -rf build/
+	rm -rf build/ dist/ 
