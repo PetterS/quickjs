@@ -211,3 +211,15 @@ class FunctionTest(unittest.TestCase):
                 return obj.data;
             }""")
         self.assertEqual(f({"data": {"value": 42}}), {"value": 42})
+
+
+class Strings(unittest.TestCase):
+    def test_unicode(self):
+        identity = quickjs.Function(
+            "identity", """
+            function identity(x) {
+                return x;
+            }
+            """)
+        for x in ["äpple", "≤≥", "☺"]:
+            self.assertEqual(identity(x), x)
