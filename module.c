@@ -92,7 +92,10 @@ static PyObject *object_call(ObjectData *self, PyObject *args, PyObject *kwds) {
 			jsargs[i] = JS_DupValue(self->context->context, ((ObjectData *)item)->object);
 		}
 	}
-	JSValue value = JS_Call(self->context->context, self->object, JS_NULL, nargs, jsargs);
+	JSValue value;
+	Py_BEGIN_ALLOW_THREADS;
+	value = JS_Call(self->context->context, self->object, JS_NULL, nargs, jsargs);
+	Py_END_ALLOW_THREADS;
 	for (int i = 0; i < nargs; ++i) {
 		JS_FreeValue(self->context->context, jsargs[i]);
 	}
@@ -174,7 +177,10 @@ static PyObject *context_eval(ContextData *self, PyObject *args) {
 	if (!PyArg_ParseTuple(args, "s", &code)) {
 		return NULL;
 	}
-	JSValue value = JS_Eval(self->context, code, strlen(code), "<input>", JS_EVAL_TYPE_GLOBAL);
+	JSValue value;
+	Py_BEGIN_ALLOW_THREADS;
+	value = JS_Eval(self->context, code, strlen(code), "<input>", JS_EVAL_TYPE_GLOBAL);
+	Py_END_ALLOW_THREADS;
 	return quickjs_to_python(self, value);
 }
 
