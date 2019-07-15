@@ -167,6 +167,10 @@ class FunctionTest(unittest.TestCase):
         self.assertEqual(f(100, 200), 300)
         self.assertEqual(f("a", "b"), "ab")
 
+    def test_empty(self):
+        f = quickjs.Function("f", "function f() { }")
+        self.assertEqual(f(), None)
+
     def test_lists(self):
         f = quickjs.Function(
             "f", """
