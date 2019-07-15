@@ -166,3 +166,23 @@ class FunctionTest(unittest.TestCase):
         self.assertEqual(f(1, 1), 2)
         self.assertEqual(f(100, 200), 300)
         self.assertEqual(f("a", "b"), "ab")
+
+    def test_lists(self):
+        f = quickjs.Function(
+            "f", """
+            function f(arr) {
+                const result = [];
+                arr.forEach(function(elem) {
+                    result.push(elem + 42);
+                });
+                return result;
+            }""")
+        self.assertEqual(f([0, 1, 2]), [42, 43, 44])
+
+    def test_dict(self):
+        f = quickjs.Function(
+            "f", """
+            function f(obj) {
+                return obj.data;
+            }""")
+        self.assertEqual(f({"data": {"value": 42}}), {"value": 42})
