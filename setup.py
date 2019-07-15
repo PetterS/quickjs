@@ -8,11 +8,16 @@ _quickjs = Extension('_quickjs',
                          'third-party/libregexp.c', 'third-party/libunicode.c'
                      ])
 
+long_description = """
+Thin Python wrapper around https://bellard.org/quickjs/ .
+"""
+
 setup(author="Petter Strandmark",
       author_email="petter.strandmark@gmail.com",
       name='quickjs',
-      url='https://github.com/PetterS/quikcjs',
-      version='1.0.3',
+      url='https://github.com/PetterS/quickjs',
+      version='1.0.4',
       description='Wrapping the quickjs C library.',
+      long_description=long_description,
       packages=["quickjs"],
       ext_modules=[_quickjs])
