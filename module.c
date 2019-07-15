@@ -98,6 +98,7 @@ static PyObject *object_call(ObjectData *self, PyObject *args, PyObject *kwds) {
 		if (PyBool_Check(item)) {
 		} else if (PyLong_Check(item)) {
 		} else if (PyFloat_Check(item)) {
+		} else if (item == Py_None) {
 		} else if (PyUnicode_Check(item)) {
 		} else if (PyObject_IsInstance(item, (PyObject *)&Object)) {
 		} else {
@@ -119,6 +120,8 @@ static PyObject *object_call(ObjectData *self, PyObject *args, PyObject *kwds) {
 			jsargs[i] = JS_MKVAL(JS_TAG_INT, PyLong_AsLong(item));
 		} else if (PyFloat_Check(item)) {
 			jsargs[i] = JS_NewFloat64(self->context->context, PyFloat_AsDouble(item));
+		} else if (item == Py_None) {
+			jsargs[i] = JS_NULL;
 		} else if (PyUnicode_Check(item)) {
 			jsargs[i] = JS_NewString(self->context->context, PyUnicode_AsUTF8(item));
 		} else if (PyObject_IsInstance(item, (PyObject *)&Object)) {

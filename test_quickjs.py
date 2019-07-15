@@ -175,7 +175,7 @@ class FunctionTest(unittest.TestCase):
                 return x;
             }
             """)
-        for x in [True, [1], {"a": 2}, 1, 1.5, "hej"]:
+        for x in [True, [1], {"a": 2}, 1, 1.5, "hej", None]:
             self.assertEqual(identity(x), x)
 
     def test_bool(self):

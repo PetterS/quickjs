@@ -26,7 +26,7 @@ class Function:
 
     def _call(self, *args):
         def convert_arg(arg):
-            if isinstance(arg, (str, bool, float, int)):
+            if isinstance(arg, (type(None), str, bool, float, int)):
                 return arg
             else:
                 # More complex objects are passed through JSON.
