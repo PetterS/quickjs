@@ -1,3 +1,5 @@
+#include <time.h>
+
 #include <Python.h>
 
 #include "third-party/quickjs.h"
@@ -6,6 +8,8 @@
 typedef struct {
 	PyObject_HEAD JSRuntime *runtime;
 	JSContext *context;
+	int has_time_limit;
+	clock_t time_limit;
 } ContextData;
 
 // The data of the type _quickjs.Object.
@@ -21,6 +25,38 @@ static PyObject *JSException = NULL;
 //
 // Takes ownership of the JSValue and will deallocate it (refcount reduced by 1).
 static PyObject *quickjs_to_python(ContextData *context_obj, JSValue value);
+
+// Keeps track of the time if we are using a time limit.
+typedef struct {
+	clock_t start;
+	clock_t limit;
+} InterruptData;
+
+// Returns nonzero if we should stop due to a time limit.
+static int js_interrupt_handler(JSRuntime *rt, void *opaque) {
+	InterruptData *data = opaque;
+	if (clock() - data->start >= data->limit) {
+		return 1;
+	} else {
+		return 0;
+	}
+}
+
+// Sets up a context and an InterruptData struct if the context has a time limit.
+static void setup_time_limit(ContextData *context, InterruptData *interrupt_data) {
+	if (context->has_time_limit) {
+		JS_SetInterruptHandler(context->runtime, js_interrupt_handler, interrupt_data);
+		interrupt_data->limit = context->time_limit;
+		interrupt_data->start = clock();
+	}
+}
+
+// Restores the context if the context has a time limit.
+static void teardown_time_limit(ContextData *context) {
+	if (context->has_time_limit) {
+		JS_SetInterruptHandler(context->runtime, NULL, NULL);
+	}
+}
 
 // Creates an instance of the Object class.
 static PyObject *object_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
@@ -134,7 +170,10 @@ static PyObject *object_call(ObjectData *self, PyObject *args, PyObject *kwds) {
 	// function from JS, this needs to be reversed or improved.
 	JSValue value;
 	Py_BEGIN_ALLOW_THREADS;
+	InterruptData interrupt_data;
+	setup_time_limit(self->context, &interrupt_data);
 	value = JS_Call(self->context->context, self->object, JS_NULL, nargs, jsargs);
+	teardown_time_limit(self->context);
 	Py_END_ALLOW_THREADS;
 
 	for (int i = 0; i < nargs; ++i) {
@@ -213,6 +252,8 @@ static PyObject *context_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 		// _quickjs.Context can be used concurrently.
 		self->runtime = JS_NewRuntime();
 		self->context = JS_NewContext(self->runtime);
+		self->has_time_limit = 0;
+		self->time_limit = 0;
 	}
 	return (PyObject *)self;
 }
@@ -239,7 +280,10 @@ static PyObject *context_eval(ContextData *self, PyObject *args) {
 	// function from JS, this needs to be reversed or improved.
 	JSValue value;
 	Py_BEGIN_ALLOW_THREADS;
+	InterruptData interrupt_data;
+	setup_time_limit(self, &interrupt_data);
 	value = JS_Eval(self->context, code, strlen(code), "<input>", JS_EVAL_TYPE_GLOBAL);
+	teardown_time_limit(self);
 	Py_END_ALLOW_THREADS;
 	return quickjs_to_python(self, value);
 }
@@ -270,11 +314,35 @@ static PyObject *context_set_memory_limit(ContextData *self, PyObject *args) {
 	Py_RETURN_NONE;
 }
 
+// _quickjs.Context.set_time_limit
+//
+// Retrieves a global variable from the JS context.
+static PyObject *context_set_time_limit(ContextData *self, PyObject *args) {
+	double limit;
+	if (!PyArg_ParseTuple(args, "d", &limit)) {
+		return NULL;
+	}
+	if (limit < 0) {
+		self->has_time_limit = 0;
+	} else {
+		self->has_time_limit = 1;
+		self->time_limit = (clock_t)(limit * CLOCKS_PER_SEC);
+	}
+	Py_RETURN_NONE;
+}
+
 // All methods of the _quickjs.Context class.
 static PyMethodDef context_methods[] = {
     {"eval", (PyCFunction)context_eval, METH_VARARGS, "Evaluates a Javascript string."},
     {"get", (PyCFunction)context_get, METH_VARARGS, "Gets a Javascript global variable."},
-	{"set_memory_limit", (PyCFunction)context_set_memory_limit, METH_VARARGS, "Sets the memory limit in bytes."},
+    {"set_memory_limit",
+     (PyCFunction)context_set_memory_limit,
+     METH_VARARGS,
+     "Sets the memory limit in bytes."},
+    {"set_time_limit",
+     (PyCFunction)context_set_time_limit,
+     METH_VARARGS,
+     "Sets the CPU time limit in seconds (C function clock() is used)."},
     {NULL} /* Sentinel */
 };
 

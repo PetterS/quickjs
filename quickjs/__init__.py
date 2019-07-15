@@ -24,6 +24,14 @@ class Function:
         with self._lock:
             return self._call(*args)
 
+    def set_memory_limit(self, limit):
+        with self._lock:
+            return self._context.set_memory_limit(limit)
+
+    def set_time_limit(self, limit):
+        with self._lock:
+            return self._context.set_time_limit(limit)
+
     def _call(self, *args):
         def convert_arg(arg):
             if isinstance(arg, (type(None), str, bool, float, int)):

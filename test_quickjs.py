@@ -75,15 +75,36 @@ class Context(unittest.TestCase):
 
     def test_memory_limit(self):
         code = """
-            let arr = [];
-            for (let i = 0; i < 1000; ++i) {
-                arr.push(i);
-            }
+            (function() {
+                let arr = [];
+                for (let i = 0; i < 1000; ++i) {
+                    arr.push(i);
+                }
+            })();
         """
         self.context.eval(code)
         self.context.set_memory_limit(1000)
         with self.assertRaisesRegex(quickjs.JSException, "null"):
             self.context.eval(code)
+        self.context.set_memory_limit(1000000)
+        self.context.eval(code)
+
+    def test_time_limit(self):
+        code = """
+            (function() {
+                let arr = [];
+                for (let i = 0; i < 100000; ++i) {
+                    arr.push(i);
+                }
+                return arr;
+            })();
+        """
+        self.context.eval(code)
+        self.context.set_time_limit(0)
+        with self.assertRaisesRegex(quickjs.JSException, "InternalError: interrupted"):
+            self.context.eval(code)
+        self.context.set_time_limit(-1)
+        self.context.eval(code)
 
 
 class Object(unittest.TestCase):
@@ -223,6 +244,24 @@ class FunctionTest(unittest.TestCase):
                 return obj.data;
             }""")
         self.assertEqual(f({"data": {"value": 42}}), {"value": 42})
+
+    def test_time_limit(self):
+        f = quickjs.Function(
+            "f", """
+            function f() {
+                let arr = [];
+                for (let i = 0; i < 100000; ++i) {
+                    arr.push(i);
+                }
+                return arr;
+            }
+        """)
+        f()
+        f.set_time_limit(0)
+        with self.assertRaisesRegex(quickjs.JSException, "InternalError: interrupted"):
+            f()
+        f.set_time_limit(-1)
+        f()
 
 
 class Strings(unittest.TestCase):
