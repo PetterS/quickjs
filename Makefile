@@ -1,16 +1,16 @@
-PYTHON = python3.6
+PYTHON = python
 
 test: install
 	$(PYTHON) -m unittest
 
 install: build
-	$(PYTHON) setup.py install --user
+	$(PYTHON) setup.py develop
 
 build: Makefile module.c third-party/quickjs.c third-party/quickjs.h
 	$(PYTHON) setup.py build
 
 format:
-	$(PYTHON) -m yapf -i -r --style .style.yapf  .
+	$(PYTHON) -m yapf -i -r --style .style.yapf *.py
 	clang-format-7 -i module.c
 
 distribute: test
