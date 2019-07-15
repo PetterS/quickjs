@@ -304,7 +304,7 @@ static PyObject *context_get(ContextData *self, PyObject *args) {
 
 // _quickjs.Context.set_memory_limit
 //
-// Retrieves a global variable from the JS context.
+// Sets the memory limit of the context.
 static PyObject *context_set_memory_limit(ContextData *self, PyObject *args) {
 	Py_ssize_t limit;
 	if (!PyArg_ParseTuple(args, "n", &limit)) {
@@ -316,7 +316,7 @@ static PyObject *context_set_memory_limit(ContextData *self, PyObject *args) {
 
 // _quickjs.Context.set_time_limit
 //
-// Retrieves a global variable from the JS context.
+// Sets the CPU time limit of the context. This will be used in an interrupt handler.
 static PyObject *context_set_time_limit(ContextData *self, PyObject *args) {
 	double limit;
 	if (!PyArg_ParseTuple(args, "d", &limit)) {
