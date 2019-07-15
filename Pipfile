@@ -10,6 +10,3 @@ yapf = "*"
 setuptools = "*"
 wheel = "*"
 twine = "*"
-
-[requires]
-python_version = "3.8"
