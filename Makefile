@@ -1,27 +1,26 @@
-PYTHON = python
 
 test: install
-	$(PYTHON) -m unittest
+	pipenv run python -m unittest
 
 install: build
-	$(PYTHON) setup.py develop
+	pipenv run python setup.py develop
 
 build: Makefile module.c third-party/quickjs.c third-party/quickjs.h
-	$(PYTHON) setup.py build
+	pipenv run python setup.py build
 
 format:
-	$(PYTHON) -m yapf -i -r --style .style.yapf *.py
+	pipenv run python -m yapf -i -r --style .style.yapf *.py
 	clang-format-7 -i module.c
 
 distribute: test
 	rm -rf dist/
-	$(PYTHON) setup.py sdist
+	pipenv run python setup.py sdist
 
 upload-test: distribute
-	$(PYTHON) -m twine upload --repository-url https://test.pypi.org/legacy/ dist/*
+	pipenv run python -m twine upload --repository-url https://test.pypi.org/legacy/ dist/*
 
 upload: distribute
-	$(PYTHON) -m twine upload dist/*
+	pipenv run python -m twine upload dist/*
 
 clean:
 	rm -rf build/ dist/ 
