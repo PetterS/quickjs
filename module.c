@@ -95,11 +95,16 @@ static PyObject *object_call(ObjectData *self, PyObject *args, PyObject *kwds) {
 	const int nargs = PyTuple_Size(args);
 	for (int i = 0; i < nargs; ++i) {
 		PyObject *item = PyTuple_GetItem(args, i);
-		if (PyLong_Check(item)) {
+		if (PyBool_Check(item)) {
+		} else if (PyLong_Check(item)) {
+		} else if (PyFloat_Check(item)) {
 		} else if (PyUnicode_Check(item)) {
 		} else if (PyObject_IsInstance(item, (PyObject *)&Object)) {
 		} else {
-			PyErr_Format(PyExc_ValueError, "Unsupported type when calling quickjs object");
+			PyErr_Format(PyExc_ValueError,
+			             "Unsupported type of argument %d when calling quickjs object: %s.",
+			             i,
+			             Py_TYPE(item)->tp_name);
 			return NULL;
 		}
 	}
@@ -108,8 +113,12 @@ static PyObject *object_call(ObjectData *self, PyObject *args, PyObject *kwds) {
 	JSValueConst *jsargs = malloc(nargs * sizeof(JSValueConst));
 	for (int i = 0; i < nargs; ++i) {
 		PyObject *item = PyTuple_GetItem(args, i);
-		if (PyLong_Check(item)) {
+		if (PyBool_Check(item)) {
+			jsargs[i] = JS_MKVAL(JS_TAG_BOOL, item == Py_True ? 1 : 0);
+		} else if (PyLong_Check(item)) {
 			jsargs[i] = JS_MKVAL(JS_TAG_INT, PyLong_AsLong(item));
+		} else if (PyFloat_Check(item)) {
+			jsargs[i] = JS_NewFloat64(self->context->context, PyFloat_AsDouble(item));
 		} else if (PyUnicode_Check(item)) {
 			jsargs[i] = JS_NewString(self->context->context, PyUnicode_AsUTF8(item));
 		} else if (PyObject_IsInstance(item, (PyObject *)&Object)) {

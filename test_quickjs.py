@@ -24,6 +24,7 @@ class Context(unittest.TestCase):
 
     def test_eval_bool(self):
         self.assertEqual(self.context.eval("true || false"), True)
+        self.assertEqual(self.context.eval("true && false"), False)
 
     def test_eval_null(self):
         self.assertIsNone(self.context.eval("null"))
@@ -166,6 +167,26 @@ class FunctionTest(unittest.TestCase):
         self.assertEqual(f(1, 1), 2)
         self.assertEqual(f(100, 200), 300)
         self.assertEqual(f("a", "b"), "ab")
+
+    def test_identity(self):
+        identity = quickjs.Function(
+            "identity", """
+            function identity(x) {
+                return x;
+            }
+            """)
+        for x in [True, [1], {"a": 2}, 1, 1.5, "hej"]:
+            self.assertEqual(identity(x), x)
+
+    def test_bool(self):
+        f = quickjs.Function(
+            "f", """
+            function f(x) {
+                return [typeof x ,!x];
+            }
+            """)
+        self.assertEqual(f(False), ["boolean", True])
+        self.assertEqual(f(True), ["boolean", False])
 
     def test_empty(self):
         f = quickjs.Function("f", "function f() { }")
