@@ -137,6 +137,11 @@ static PyObject *object_call(ObjectData *self, PyObject *args, PyObject *kwds) {
 		} else if (item == Py_None) {
 		} else if (PyUnicode_Check(item)) {
 		} else if (PyObject_IsInstance(item, (PyObject *)&Object)) {
+			ObjectData *object = (ObjectData *)item;
+			if (object->context != self->context) {
+				PyErr_Format(PyExc_ValueError, "Can not mix JS objects from different contexts.");
+				return NULL;
+			}
 		} else {
 			PyErr_Format(PyExc_ValueError,
 			             "Unsupported type of argument %d when calling quickjs object: %s.",

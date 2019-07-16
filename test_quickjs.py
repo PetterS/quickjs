@@ -263,6 +263,14 @@ class FunctionTest(unittest.TestCase):
         f.set_time_limit(-1)
         f()
 
+    def test_wrong_context(self):
+        context1 = quickjs.Context()
+        context2 = quickjs.Context()
+        f = context1.eval("(function(x) { return x.a; })")
+        d = context2.eval("({a: 1})")
+        with self.assertRaisesRegex(ValueError, "Can not mix JS objects from different contexts."):
+            f(d)
+
 
 class Strings(unittest.TestCase):
     def test_unicode(self):
