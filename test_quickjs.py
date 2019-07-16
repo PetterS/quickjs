@@ -188,6 +188,11 @@ class Object(unittest.TestCase):
         d = self.context.eval("d = {data: 42};")
         self.assertEqual(json.loads(d.json()), {"data": 42})
 
+    def test_call_nonfunction(self):
+        d = self.context.eval("({data: 42})")
+        with self.assertRaisesRegex(quickjs.JSException, "TypeError: not a function"):
+            d(1)
+
 
 class FunctionTest(unittest.TestCase):
     def test_adder(self):
