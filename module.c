@@ -336,6 +336,53 @@ static PyObject *context_set_time_limit(ContextData *self, PyObject *args) {
 	Py_RETURN_NONE;
 }
 
+// _quickjs.Context.memory
+//
+// Sets the CPU time limit of the context. This will be used in an interrupt handler.
+static PyObject *context_memory(ContextData *self) {
+	PyObject *dict = PyDict_New();
+	if (dict == NULL) {
+		return NULL;
+	}
+	JSMemoryUsage usage;
+	JS_ComputeMemoryUsage(self->runtime, &usage);
+#define MEM_USAGE_ADD_TO_DICT(key)                          \
+	{                                                       \
+		PyObject *value = PyLong_FromLongLong(usage.key);   \
+		if (PyDict_SetItemString(dict, #key, value) != 0) { \
+			return NULL;                                    \
+		}                                                   \
+		Py_DECREF(value);                                   \
+	}
+	MEM_USAGE_ADD_TO_DICT(malloc_size);
+	MEM_USAGE_ADD_TO_DICT(malloc_limit);
+	MEM_USAGE_ADD_TO_DICT(memory_used_size);
+	MEM_USAGE_ADD_TO_DICT(malloc_count);
+	MEM_USAGE_ADD_TO_DICT(memory_used_count);
+	MEM_USAGE_ADD_TO_DICT(atom_count);
+	MEM_USAGE_ADD_TO_DICT(atom_size);
+	MEM_USAGE_ADD_TO_DICT(str_count);
+	MEM_USAGE_ADD_TO_DICT(str_size);
+	MEM_USAGE_ADD_TO_DICT(obj_count);
+	MEM_USAGE_ADD_TO_DICT(obj_size);
+	MEM_USAGE_ADD_TO_DICT(prop_count);
+	MEM_USAGE_ADD_TO_DICT(prop_size);
+	MEM_USAGE_ADD_TO_DICT(shape_count);
+	MEM_USAGE_ADD_TO_DICT(shape_size);
+	MEM_USAGE_ADD_TO_DICT(js_func_count);
+	MEM_USAGE_ADD_TO_DICT(js_func_size);
+	MEM_USAGE_ADD_TO_DICT(js_func_code_size);
+	MEM_USAGE_ADD_TO_DICT(js_func_pc2line_count);
+	MEM_USAGE_ADD_TO_DICT(js_func_pc2line_size);
+	MEM_USAGE_ADD_TO_DICT(c_func_count);
+	MEM_USAGE_ADD_TO_DICT(array_count);
+	MEM_USAGE_ADD_TO_DICT(fast_array_count);
+	MEM_USAGE_ADD_TO_DICT(fast_array_elements);
+	MEM_USAGE_ADD_TO_DICT(binary_object_count);
+	MEM_USAGE_ADD_TO_DICT(binary_object_size);
+	return dict;
+}
+
 // All methods of the _quickjs.Context class.
 static PyMethodDef context_methods[] = {
     {"eval", (PyCFunction)context_eval, METH_VARARGS, "Evaluates a Javascript string."},
@@ -348,6 +395,7 @@ static PyMethodDef context_methods[] = {
      (PyCFunction)context_set_time_limit,
      METH_VARARGS,
      "Sets the CPU time limit in seconds (C function clock() is used)."},
+    {"memory", (PyCFunction)context_memory, METH_NOARGS, "Returns the memory usage as a dict."},
     {NULL} /* Sentinel */
 };
 

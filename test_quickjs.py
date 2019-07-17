@@ -106,6 +106,9 @@ class Context(unittest.TestCase):
         self.context.set_time_limit(-1)
         self.context.eval(code)
 
+    def test_memory_usage(self):
+        self.assertIn("memory_used_size", self.context.memory().keys())
+
 
 class Object(unittest.TestCase):
     def setUp(self):

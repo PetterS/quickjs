@@ -1,8 +1,8 @@
 BasedOnStyle: Google
 
 # For calculating line lengths.
-IndentWidth: 2
-TabWidth: 2
+IndentWidth: 4
+TabWidth: 4
 
 UseTab: ForIndentation
 ColumnLimit: 100
