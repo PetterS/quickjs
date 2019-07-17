@@ -196,6 +196,14 @@ class Object(unittest.TestCase):
         with self.assertRaisesRegex(quickjs.JSException, "TypeError: not a function"):
             d(1)
 
+    def test_wrong_context(self):
+        context1 = quickjs.Context()
+        context2 = quickjs.Context()
+        f = context1.eval("(function(x) { return x.a; })")
+        d = context2.eval("({a: 1})")
+        with self.assertRaisesRegex(ValueError, "Can not mix JS objects from different contexts."):
+            f(d)
+
 
 class FunctionTest(unittest.TestCase):
     def test_adder(self):
@@ -271,13 +279,27 @@ class FunctionTest(unittest.TestCase):
         f.set_time_limit(-1)
         f()
 
-    def test_wrong_context(self):
-        context1 = quickjs.Context()
-        context2 = quickjs.Context()
-        f = context1.eval("(function(x) { return x.a; })")
-        d = context2.eval("({a: 1})")
-        with self.assertRaisesRegex(ValueError, "Can not mix JS objects from different contexts."):
-            f(d)
+    def test_garbage_collection(self):
+        f = quickjs.Function(
+            "f", """
+            function f() {
+                let a = {};
+                let b = {};
+                a.b = b;
+                b.a = a;
+                a.i = 42;
+                return a.i;
+            }
+        """)
+        initial_count = f.memory()["obj_count"]
+        for i in range(10):
+            prev_count = f.memory()["obj_count"]
+            self.assertEqual(f(run_gc=False), 42)
+            current_count = f.memory()["obj_count"]
+            self.assertGreater(current_count, prev_count)
+
+        f.gc()
+        self.assertLessEqual(f.memory()["obj_count"], initial_count)
 
 
 class Strings(unittest.TestCase):

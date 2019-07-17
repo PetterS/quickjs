@@ -383,6 +383,14 @@ static PyObject *context_memory(ContextData *self) {
 	return dict;
 }
 
+// _quickjs.Context.gc
+//
+// Runs garbage collection.
+static PyObject *context_gc(ContextData *self) {
+	JS_RunGC(self->runtime);
+	Py_RETURN_NONE;
+}
+
 // All methods of the _quickjs.Context class.
 static PyMethodDef context_methods[] = {
     {"eval", (PyCFunction)context_eval, METH_VARARGS, "Evaluates a Javascript string."},
@@ -396,6 +404,7 @@ static PyMethodDef context_methods[] = {
      METH_VARARGS,
      "Sets the CPU time limit in seconds (C function clock() is used)."},
     {"memory", (PyCFunction)context_memory, METH_NOARGS, "Returns the memory usage as a dict."},
+    {"gc", (PyCFunction)context_gc, METH_NOARGS, "Runs garbage collection."},
     {NULL} /* Sentinel */
 };
 
