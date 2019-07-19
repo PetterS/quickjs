@@ -3,3 +3,4 @@ build
 dist
 quickjs.egg-info
 *.so
+*.pyd

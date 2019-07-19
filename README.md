@@ -2,6 +2,8 @@ Just install with
 
 	pip install quickjs
 
+Windows binaries are provided for Python 3.7, 64-bit.
+
 # Usage
 
 ```python

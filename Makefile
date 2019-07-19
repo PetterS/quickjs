@@ -14,6 +14,11 @@ format:
 
 distribute: test
 	rm -rf dist/
+	@echo "Now build the wheel for Windows in the dist/ folder."
+	@echo "       pipenv run python setup.py build -c mingw32"
+	@echo "       pipenv run python setup.py bdist_wheel --skip-build"
+	@echo "Press enter to continue when done..."
+	@read _
 	pipenv run python setup.py sdist
 
 upload-test: distribute
@@ -24,3 +29,5 @@ upload: distribute
 
 clean:
 	rm -rf build/ dist/ 
+	rm *.so
+	rm *.pyd
