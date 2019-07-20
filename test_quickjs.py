@@ -308,6 +308,25 @@ class FunctionTest(unittest.TestCase):
         f.gc()
         self.assertLessEqual(f.memory()["obj_count"], initial_count)
 
+    def test_deep_recursion(self):
+        f = quickjs.Function(
+            "f", """
+            function f(v) {
+                if (v <= 0) {
+                    return 0;
+                } else {
+                    return 1 + f(v - 1);
+                }
+            }
+        """)
+
+        self.assertEqual(f(100), 100)
+        limit = 500
+        with self.assertRaises(quickjs.StackOverflow):
+            f(limit)
+        f.set_max_stack_size(2000 * limit)
+        self.assertEqual(f(limit), limit)
+
 
 class Strings(unittest.TestCase):
     def test_unicode(self):

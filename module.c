@@ -21,6 +21,7 @@ typedef struct {
 
 // The exception raised by this module.
 static PyObject *JSException = NULL;
+static PyObject *StackOverflow = NULL;
 // Converts a JSValue to a Python object.
 //
 // Takes ownership of the JSValue and will deallocate it (refcount reduced by 1).
@@ -210,7 +211,11 @@ static PyObject *quickjs_to_python(ContextData *context_obj, JSValue value) {
 		JSValue exception = JS_GetException(context);
 		JSValue error_string = JS_ToString(context, exception);
 		const char *cstring = JS_ToCString(context, error_string);
-		PyErr_Format(JSException, "%s", cstring);
+		if (strstr(cstring, "stack overflow") != NULL) {
+			PyErr_Format(StackOverflow, "%s", cstring);
+		} else {
+			PyErr_Format(JSException, "%s", cstring);
+		}
 		JS_FreeCString(context, cstring);
 		JS_FreeValue(context, error_string);
 		JS_FreeValue(context, exception);
@@ -349,6 +354,18 @@ static PyObject *context_set_time_limit(ContextData *self, PyObject *args) {
 	Py_RETURN_NONE;
 }
 
+// _quickjs.Context.set_max_stack_size
+//
+// Sets the max stack size in bytes.
+static PyObject *context_set_max_stack_size(ContextData *self, PyObject *args) {
+	Py_ssize_t limit;
+	if (!PyArg_ParseTuple(args, "n", &limit)) {
+		return NULL;
+	}
+	JS_SetMaxStackSize(self->context, limit);
+	Py_RETURN_NONE;
+}
+
 // _quickjs.Context.memory
 //
 // Sets the CPU time limit of the context. This will be used in an interrupt handler.
@@ -420,6 +437,10 @@ static PyMethodDef context_methods[] = {
      (PyCFunction)context_set_time_limit,
      METH_VARARGS,
      "Sets the CPU time limit in seconds (C function clock() is used)."},
+    {"set_max_stack_size",
+     (PyCFunction)context_set_max_stack_size,
+     METH_VARARGS,
+     "Sets the maximum stack size in bytes. Default is 256kB."},
     {"memory", (PyCFunction)context_memory, METH_NOARGS, "Returns the memory usage as a dict."},
     {"gc", (PyCFunction)context_gc, METH_NOARGS, "Runs garbage collection."},
     {NULL} /* Sentinel */
@@ -468,11 +489,16 @@ PyMODINIT_FUNC PyInit__quickjs(void) {
 	if (JSException == NULL) {
 		return NULL;
 	}
+	StackOverflow = PyErr_NewException("_quickjs.StackOverflow", JSException, NULL);
+	if (StackOverflow == NULL) {
+		return NULL;
+	}
 
 	Py_INCREF(&Context);
 	PyModule_AddObject(module, "Context", (PyObject *)&Context);
 	Py_INCREF(&Object);
 	PyModule_AddObject(module, "Object", (PyObject *)&Object);
 	PyModule_AddObject(module, "JSException", JSException);
+	PyModule_AddObject(module, "StackOverflow", StackOverflow);
 	return module;
 }

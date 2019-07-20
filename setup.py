@@ -22,6 +22,7 @@ if sys.platform == "win32":
     # on computers where it is not installed.
     extra_link_args = ["-Wl,-Bstatic", "-lpthread"]
 
+
 def get_c_sources(include_headers=False):
     sources = ['module.c'] + glob.glob("third-party/*.c")
     if include_headers:
@@ -45,7 +46,7 @@ setup(author="Petter Strandmark",
       author_email="petter.strandmark@gmail.com",
       name='quickjs',
       url='https://github.com/PetterS/quickjs',
-      version='1.3.1',
+      version='1.4.0',
       description='Wrapping the quickjs C library.',
       long_description=long_description,
       packages=["quickjs"],

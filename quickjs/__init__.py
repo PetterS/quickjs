@@ -11,6 +11,7 @@ def test():
 Context = _quickjs.Context
 Object = _quickjs.Object
 JSException = _quickjs.JSException
+StackOverflow = _quickjs.StackOverflow
 
 
 class Function:
@@ -31,6 +32,10 @@ class Function:
     def set_time_limit(self, limit):
         with self._lock:
             return self._context.set_time_limit(limit)
+
+    def set_max_stack_size(self, limit):
+        with self._lock:
+            return self._context.set_max_stack_size(limit)
 
     def memory(self):
         with self._lock:
