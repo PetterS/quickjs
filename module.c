@@ -220,7 +220,7 @@ static PyObject *quickjs_to_python(ContextData *context_obj, JSValue value) {
 		const char *cstring = JS_ToCString(context, value);
 		return_value = Py_BuildValue("s", cstring);
 		JS_FreeCString(context, cstring);
-	} else if (tag == JS_TAG_OBJECT) {
+	} else if (tag == JS_TAG_OBJECT || tag == JS_TAG_MODULE) {
 		// This is a Javascript object or function. We wrap it in a _quickjs.Object.
 		return_value = PyObject_CallObject((PyObject *)&Object, NULL);
 		ObjectData *object = (ObjectData *)return_value;
@@ -270,11 +270,9 @@ static void context_dealloc(ContextData *self) {
 	Py_TYPE(self)->tp_free((PyObject *)self);
 }
 
-// _quickjs.Context.eval
-//
 // Evaluates a Python string as JS and returns the result as a Python object. Will return
 // _quickjs.Object for complex types (other than e.g. str, int).
-static PyObject *context_eval(ContextData *self, PyObject *args) {
+static PyObject *context_eval_internal(ContextData *self, PyObject *args, int eval_type) {
 	const char *code;
 	if (!PyArg_ParseTuple(args, "s", &code)) {
 		return NULL;
@@ -287,10 +285,25 @@ static PyObject *context_eval(ContextData *self, PyObject *args) {
 	Py_BEGIN_ALLOW_THREADS;
 	InterruptData interrupt_data;
 	setup_time_limit(self, &interrupt_data);
-	value = JS_Eval(self->context, code, strlen(code), "<input>", JS_EVAL_TYPE_GLOBAL);
+	value = JS_Eval(self->context, code, strlen(code), "<input>", eval_type);
 	teardown_time_limit(self);
 	Py_END_ALLOW_THREADS;
 	return quickjs_to_python(self, value);
+}
+
+// _quickjs.Context.eval
+//
+// Evaluates a Python string as JS and returns the result as a Python object. Will return
+// _quickjs.Object for complex types (other than e.g. str, int).
+static PyObject *context_eval(ContextData *self, PyObject *args) {
+	return context_eval_internal(self, args, JS_EVAL_TYPE_GLOBAL);
+}
+
+// _quickjs.Context.module
+//
+// Evaluates a Python string as JS module. Otherwise identical to eval.
+static PyObject *context_module(ContextData *self, PyObject *args) {
+	return context_eval_internal(self, args, JS_EVAL_TYPE_MODULE);
 }
 
 // _quickjs.Context.get
@@ -394,6 +407,10 @@ static PyObject *context_gc(ContextData *self) {
 // All methods of the _quickjs.Context class.
 static PyMethodDef context_methods[] = {
     {"eval", (PyCFunction)context_eval, METH_VARARGS, "Evaluates a Javascript string."},
+    {"module",
+     (PyCFunction)context_module,
+     METH_VARARGS,
+     "Evaluates a Javascript string as a module."},
     {"get", (PyCFunction)context_get, METH_VARARGS, "Gets a Javascript global variable."},
     {"set_memory_limit",
      (PyCFunction)context_set_memory_limit,

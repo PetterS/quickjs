@@ -54,6 +54,13 @@ class Context(unittest.TestCase):
         self.assertEqual(self.context.get("y"), "foo")
         self.assertEqual(self.context.get("z"), None)
 
+    def test_module(self):
+        self.context.module("""   
+            export function test() {
+                return 42;
+            }
+        """)
+
     def test_error(self):
         with self.assertRaisesRegex(quickjs.JSException, "ReferenceError: missing is not defined"):
             self.context.eval("missing + missing")
@@ -310,5 +317,7 @@ class Strings(unittest.TestCase):
                 return x;
             }
             """)
+        context = quickjs.Context()
         for x in ["äpple", "≤≥", "☺"]:
             self.assertEqual(identity(x), x)
+            self.assertEqual(context.eval('(function(){ return "' + x + '";})()'), x)
