@@ -17,7 +17,7 @@ if sys.platform == "win32":
     import distutils.cygwinccompiler
     distutils.cygwinccompiler.get_msvcr = lambda: []
     # Escaping works differently.
-    CONFIG_VERSION = '\\"2019-07-09\\"'
+    CONFIG_VERSION = '\\"2019-07-21\\"'
     # Make sure that pthreads is linked statically, otherwise we run into problems
     # on computers where it is not installed.
     extra_link_args = ["-Wl,-Bstatic", "-lpthread"]
