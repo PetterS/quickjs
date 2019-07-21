@@ -144,7 +144,7 @@ static PyObject *object_call(ObjectData *self, PyObject *args, PyObject *kwds) {
 				return NULL;
 			}
 		} else {
-			PyErr_Format(PyExc_ValueError,
+			PyErr_Format(PyExc_TypeError,
 			             "Unsupported type of argument %d when calling quickjs object: %s.",
 			             i,
 			             Py_TYPE(item)->tp_name);
@@ -235,7 +235,7 @@ static PyObject *quickjs_to_python(ContextData *context_obj, JSValue value) {
 		object->context = context_obj;
 		object->object = JS_DupValue(context, value);
 	} else {
-		PyErr_Format(PyExc_ValueError, "Unknown quickjs tag: %d", tag);
+		PyErr_Format(PyExc_TypeError, "Unknown quickjs tag: %d", tag);
 	}
 
 	JS_FreeValue(context, value);

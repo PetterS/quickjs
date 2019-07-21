@@ -191,7 +191,7 @@ class Object(unittest.TestCase):
                 return 40 + x;
             }
             """)
-        with self.assertRaisesRegex(ValueError, "Unsupported type"):
+        with self.assertRaisesRegex(TypeError, "Unsupported type"):
             self.assertEqual(f({}), 42)
 
     def test_json(self):
