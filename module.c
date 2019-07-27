@@ -10,6 +10,7 @@ typedef struct {
 	JSContext *context;
 	int has_time_limit;
 	clock_t time_limit;
+	PyObject* module_loader;
 } ContextData;
 
 // The data of the type _quickjs.Object.
@@ -32,6 +33,34 @@ typedef struct {
 	clock_t start;
 	clock_t limit;
 } InterruptData;
+
+static JSModuleDef *js_module_loader(JSContext *ctx,
+                              const char *module_name, void *opaque) {
+    ContextData* context = (ContextData*) opaque;
+	JSModuleDef* module = NULL;
+	if (context->module_loader == NULL || !PyCallable_Check(context->module_loader)) {
+		JS_ThrowReferenceError(ctx, "Could not load module \"%s\": no loader.", module_name);
+		return NULL;
+	} else {
+		PyObject* result = PyObject_CallFunction(context->module_loader, "s", module_name);
+
+		if (result == NULL) {
+			JS_ThrowReferenceError(ctx, "Could not load module \"%s\": loader failed.", module_name);	
+		} else if (!PyUnicode_Check(result)) {
+			JS_ThrowReferenceError(ctx, "Could not load module \"%s\": loader did not return a string.", module_name);
+		} else {
+			const char* code =  PyUnicode_AsUTF8(result);
+			JSValue js_value = JS_Eval(ctx, code, strlen(code), module_name, JS_EVAL_TYPE_MODULE | JS_EVAL_FLAG_COMPILE_ONLY);
+			if (!JS_IsException(js_value)) {
+				module = JS_VALUE_GET_PTR(js_value);
+        		JS_FreeValue(ctx, js_value);
+			}			
+		}
+
+		Py_XDECREF(result);
+	}
+    return module;
+}
 
 // Returns nonzero if we should stop due to a time limit.
 static int js_interrupt_handler(JSRuntime *rt, void *opaque) {
@@ -255,23 +284,26 @@ struct module_state {};
 
 // Creates an instance of the _quickjs.Context class.
 static PyObject *context_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
-	ContextData *self;
-	self = (ContextData *)type->tp_alloc(type, 0);
+	ContextData *self = (ContextData *)type->tp_alloc(type, 0);
 	if (self != NULL) {
 		// We never have different contexts for the same runtime. This way, different
 		// _quickjs.Context can be used concurrently.
 		self->runtime = JS_NewRuntime();
-		self->context = JS_NewContext(self->runtime);
+		self->context = JS_NewContext(self->runtime);		
 		self->has_time_limit = 0;
 		self->time_limit = 0;
+		self->module_loader = NULL;
+
+		JS_SetModuleLoaderFunc(self->runtime, NULL, js_module_loader, self);
 	}
 	return (PyObject *)self;
 }
 
 // Deallocates an instance of the _quickjs.Context class.
-static void context_dealloc(ContextData *self) {
+static void context_dealloc(ContextData *self) {	
 	JS_FreeContext(self->context);
 	JS_FreeRuntime(self->runtime);
+	Py_XDECREF(self->module_loader);
 	Py_TYPE(self)->tp_free((PyObject *)self);
 }
 
@@ -284,15 +316,19 @@ static PyObject *context_eval_internal(ContextData *self, PyObject *args, int ev
 	}
 
 	// Perform the actual evaluation. We release the GIL in order to speed things up for certain
-	// use cases. If this module becomes more complicated and gains the capability to call Python
-	// function from JS, this needs to be reversed or improved.
+	// use cases.
 	JSValue value;
-	Py_BEGIN_ALLOW_THREADS;
 	InterruptData interrupt_data;
 	setup_time_limit(self, &interrupt_data);
-	value = JS_Eval(self->context, code, strlen(code), "<input>", eval_type);
+	if (self->module_loader != NULL && (eval_type & JS_EVAL_TYPE_MODULE)) {
+		// Can not release the GIL. We may have to call into Python code.
+		value = JS_Eval(self->context, code, strlen(code), "<input>", eval_type);
+	} else {
+		Py_BEGIN_ALLOW_THREADS;
+		value = JS_Eval(self->context, code, strlen(code), "<input>", eval_type);
+		Py_END_ALLOW_THREADS;
+	}
 	teardown_time_limit(self);
-	Py_END_ALLOW_THREADS;
 	return quickjs_to_python(self, value);
 }
 
@@ -363,6 +399,24 @@ static PyObject *context_set_max_stack_size(ContextData *self, PyObject *args) {
 		return NULL;
 	}
 	JS_SetMaxStackSize(self->context, limit);
+	Py_RETURN_NONE;
+}
+
+// _quickjs.Context.set_module_loade
+//
+// Sets the max stack size in bytes.
+static PyObject *context_set_module_loader(ContextData *self, PyObject *args) {
+	PyObject* loader;
+	if (!PyArg_ParseTuple(args, "O", &loader)) {
+		return NULL;
+	}
+	if (!PyCallable_Check(loader)) {
+		PyErr_SetString(PyExc_TypeError, "Module loader must be callable.");
+		return NULL;
+	}
+	Py_XDECREF(self->module_loader);
+	self->module_loader = loader;
+	Py_INCREF(self->module_loader);
 	Py_RETURN_NONE;
 }
 
@@ -441,6 +495,10 @@ static PyMethodDef context_methods[] = {
      (PyCFunction)context_set_max_stack_size,
      METH_VARARGS,
      "Sets the maximum stack size in bytes. Default is 256kB."},
+	{"set_module_loader",
+	 (PyCFunction)context_set_module_loader,
+     METH_VARARGS,
+     "Sets the Python function that takes a module name and returns its source code."}, 
     {"memory", (PyCFunction)context_memory, METH_NOARGS, "Returns the memory usage as a dict."},
     {"gc", (PyCFunction)context_gc, METH_NOARGS, "Runs garbage collection."},
     {NULL} /* Sentinel */

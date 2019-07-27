@@ -54,11 +54,50 @@ class Context(unittest.TestCase):
         self.assertEqual(self.context.get("y"), "foo")
         self.assertEqual(self.context.get("z"), None)
 
-    def test_module(self):
+    def test_run_module(self):
         self.context.module("""   
             export function test() {
                 return 42;
             }
+        """)
+
+    def test_import_module_without_loader(self):
+        with self.assertRaisesRegex(quickjs.JSException, "no loader"):
+            self.context.module('import { foo } from "petter";')
+
+    def test_set_module_loader_to_non_callable(self):
+        with self.assertRaises(TypeError):
+            self.context.set_module_loader(2)
+
+    def test_module_does_not_return_code(self):
+        self.context.set_module_loader(lambda name: 1)
+        with self.assertRaisesRegex(quickjs.JSException, "did not return a string"):
+            self.context.module('import { foo } from "petter";')
+
+    def _module_loader(self, name):
+        """Helper method that for module loading."""
+
+        if name == "petter":
+            return """
+                export function foo() {
+                    return 40;
+                }
+            """
+        else:
+            raise ValueError("Unknown module.")
+
+    def test_import_unknown_module(self):
+        self.context.set_module_loader(self._module_loader)
+        with self.assertRaisesRegex(quickjs.JSException, "loader failed"):
+            self.context.module('import { foo } from "somewhere_else";')
+
+    def test_import_module(self):
+        self.context.set_module_loader(self._module_loader)
+        self.context.module("""
+            import { foo } from "petter";
+            (function test() {
+                return foo();
+            })()
         """)
 
     def test_error(self):
