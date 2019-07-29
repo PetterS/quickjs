@@ -3,7 +3,7 @@ import sys
 
 from setuptools import setup, Extension
 
-CONFIG_VERSION = '"2019-07-09"'
+CONFIG_VERSION = '2019-07-28'
 extra_link_args = []
 
 if sys.platform == "win32":
@@ -17,10 +17,12 @@ if sys.platform == "win32":
     import distutils.cygwinccompiler
     distutils.cygwinccompiler.get_msvcr = lambda: []
     # Escaping works differently.
-    CONFIG_VERSION = '\\"2019-07-21\\"'
+    CONFIG_VERSION = f'\\"{CONFIG_VERSION}\\"'
     # Make sure that pthreads is linked statically, otherwise we run into problems
     # on computers where it is not installed.
     extra_link_args = ["-Wl,-Bstatic", "-lpthread"]
+else:
+    CONFIG_VERSION = f'"{CONFIG_VERSION}"'
 
 
 def get_c_sources(include_headers=False):
@@ -46,7 +48,7 @@ setup(author="Petter Strandmark",
       author_email="petter.strandmark@gmail.com",
       name='quickjs',
       url='https://github.com/PetterS/quickjs',
-      version='1.4.0',
+      version='1.5.0',
       description='Wrapping the quickjs C library.',
       long_description=long_description,
       packages=["quickjs"],
