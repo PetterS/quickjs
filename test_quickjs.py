@@ -1,3 +1,4 @@
+import concurrent.futures
 import json
 import unittest
 
@@ -340,3 +341,53 @@ class Strings(unittest.TestCase):
         for x in ["äpple", "≤≥", "☺"]:
             self.assertEqual(identity(x), x)
             self.assertEqual(context.eval('(function(){ return "' + x + '";})()'), x)
+
+
+class Threads(unittest.TestCase):
+    def setUp(self):
+        self.context = quickjs.Context()
+        self.executor = concurrent.futures.ThreadPoolExecutor()
+
+    def tearDown(self):
+        self.executor.shutdown()
+
+    def test_concurrent(self):
+        """Demonstrates that the execution will crash unless the function executes on the same
+           thread every time.
+
+           If the executor in Function is not present, this test will fail.
+        """
+        data = list(range(1000))
+        jssum = quickjs.Function(
+            "sum", """
+                function sum(data) {
+                    return data.reduce((a, b) => a + b, 0)
+                }
+            """)
+
+        futures = [self.executor.submit(jssum, data) for _ in range(10)]
+        expected = sum(data)
+        for future in concurrent.futures.as_completed(futures):
+            self.assertEqual(future.result(), expected)
+
+    def test_concurrent_own_executor(self):
+        data = list(range(1000))
+        jssum1 = quickjs.Function("sum",
+                                  """
+                                    function sum(data) {
+                                        return data.reduce((a, b) => a + b, 0)
+                                    }
+                                  """,
+                                  own_executor=True)
+        jssum2 = quickjs.Function("sum",
+                                  """
+                                    function sum(data) {
+                                        return data.reduce((a, b) => a + b, 0)
+                                    }
+                                  """,
+                                  own_executor=True)
+
+        futures = [self.executor.submit(f, data) for _ in range(10) for f in (jssum1, jssum2)]
+        expected = sum(data)
+        for future in concurrent.futures.as_completed(futures):
+            self.assertEqual(future.result(), expected)

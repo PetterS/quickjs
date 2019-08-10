@@ -211,12 +211,20 @@ static PyObject *quickjs_to_python(ContextData *context_obj, JSValue value) {
 		JSValue exception = JS_GetException(context);
 		JSValue error_string = JS_ToString(context, exception);
 		const char *cstring = JS_ToCString(context, error_string);
-		if (strstr(cstring, "stack overflow") != NULL) {
-			PyErr_Format(StackOverflow, "%s", cstring);
+		if (cstring != NULL) {
+			if (strstr(cstring, "stack overflow") != NULL) {
+				PyErr_Format(StackOverflow, "%s", cstring);
+			} else {
+				PyErr_Format(JSException, "%s", cstring);
+			}
+			JS_FreeCString(context, cstring);
 		} else {
-			PyErr_Format(JSException, "%s", cstring);
+			// This has been observed to happen when different threads have used the same QuickJS
+			// runtime, but not at the same time.
+			// Could potentially be another problem though, since JS_ToCString may return NULL.
+			PyErr_Format(JSException,
+			             "(Failed obtaining QuickJS error string. Concurrency issue?)");
 		}
-		JS_FreeCString(context, cstring);
 		JS_FreeValue(context, error_string);
 		JS_FreeValue(context, exception);
 	} else if (tag == JS_TAG_FLOAT64) {
