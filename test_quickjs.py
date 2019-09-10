@@ -391,3 +391,18 @@ class Threads(unittest.TestCase):
         expected = sum(data)
         for future in concurrent.futures.as_completed(futures):
             self.assertEqual(future.result(), expected)
+
+
+
+class QJS(object):
+    def __init__(self):
+        self.interp = quickjs.Context()
+        self.interp.eval('var foo = "bar";')
+
+
+class QuickJSContextInClass(unittest.TestCase):
+    @unittest.expectedFailure
+    def test_github_issue_7(self):
+        # This gives stack overflow internal error, due to how QuickJS calculates stack frames.
+        qjs = QJS()
+        self.assertEqual(qjs.interp.eval('2+2'), 4)
