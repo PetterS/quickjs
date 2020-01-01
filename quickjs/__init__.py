@@ -48,7 +48,7 @@ class Function:
     def set_memory_limit(self, limit):
         # TODO: Remove this when quickjs does not crash when running out of
         # memory (since version 2019-12-21).
-        raise ValueError("Setting memory limit is currently disabled")
+        raise Exception("Setting memory limit is currently disabled")
 
         with self._lock:
             return self._context.set_memory_limit(limit)
