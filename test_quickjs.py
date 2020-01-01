@@ -81,6 +81,7 @@ class Context(unittest.TestCase):
         # The context has left the scope after f. f needs to keep the context alive for the
         # its lifetime. Otherwise, we will get problems.
 
+    @unittest.skip
     def test_memory_limit(self):
         code = """
             (function() {
