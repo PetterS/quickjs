@@ -6146,6 +6146,10 @@ static JSValue JS_ThrowError2(JSContext *ctx, JSErrorEnum error_num,
     char buf[256];
     JSValue obj, ret;
 
+    if (ctx->in_out_of_memory) {
+        return JS_Throw(ctx, JS_NULL);
+    }
+
     vsnprintf(buf, sizeof(buf), fmt, ap);
     obj = JS_NewObjectProtoClass(ctx, ctx->native_error_proto[error_num],
                                  JS_CLASS_ERROR);
