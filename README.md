@@ -23,7 +23,8 @@ assert f(1, 2) == 3
 ```
 
 Simple types like int, floats and strings are converted directly. Other types (dicts, lists) are converted via JSON by the `Function` class.
-The library is thread-safe if `Function` is used (it has locks). If the `Context` class is used directly, two threads can not use the same context or its objects directly.
+The library is thread-safe if `Function` is used. If the `Context` class is used directly, it can only ever be accessed by the same thread.
+This is true even if the accesses are not concurrent.
 
 Both `Function` and `Context` expose `set_memory_limit` and `set_time_limit` functions that allow limits for code running in production.
 

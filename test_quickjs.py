@@ -81,7 +81,6 @@ class Context(unittest.TestCase):
         # The context has left the scope after f. f needs to keep the context alive for the
         # its lifetime. Otherwise, we will get problems.
 
-    @unittest.skip
     def test_memory_limit(self):
         code = """
             (function() {
@@ -330,8 +329,8 @@ class FunctionTest(unittest.TestCase):
         self.assertEqual(f(limit), limit)
 
 
-class Strings(unittest.TestCase):
-    def test_unicode(self):
+class JavascriptFeatures(unittest.TestCase):
+    def test_unicode_strings(self):
         identity = quickjs.Function(
             "identity", """
             function identity(x) {
@@ -342,6 +341,27 @@ class Strings(unittest.TestCase):
         for x in ["äpple", "≤≥", "☺"]:
             self.assertEqual(identity(x), x)
             self.assertEqual(context.eval('(function(){ return "' + x + '";})()'), x)
+
+    def test_es2020_optional_chaining(self):
+        f = quickjs.Function("f", """
+            function f(x) {
+                return x?.one?.two;
+            }
+        """)
+        self.assertIsNone(f({}))
+        self.assertIsNone(f({"one": 12}))
+        self.assertEqual(f({"one": {"two": 42}}), 42)
+
+    def test_es2020_null_coalescing(self):
+        f = quickjs.Function("f", """
+            function f(x) {
+                return x ?? 42;
+            }
+        """)
+        self.assertEqual(f(""), "")
+        self.assertEqual(f(0), 0)
+        self.assertEqual(f(11), 11)
+        self.assertEqual(f(None), 42)
 
 
 class Threads(unittest.TestCase):
