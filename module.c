@@ -319,7 +319,7 @@ static PyObject *context_parse_json(ContextData *self, PyObject *args) {
 	}
 	JSValue value;
 	Py_BEGIN_ALLOW_THREADS;
-	value = JS_ParseJSON(self->context, data, strlen(data), "data.json";
+	value = JS_ParseJSON(self->context, data, strlen(data), "context_parse_json.json");
 	Py_END_ALLOW_THREADS;
 	return quickjs_to_python(self, value);
 }
