@@ -3,7 +3,7 @@ import sys
 
 from setuptools import setup, Extension
 
-CONFIG_VERSION = '2019-12-21'
+CONFIG_VERSION = '2020-01-05'
 extra_link_args = []
 
 if sys.platform == "win32":
@@ -41,14 +41,20 @@ _quickjs = Extension(
     extra_link_args=extra_link_args)
 
 long_description = """
-Thin Python wrapper around https://bellard.org/quickjs/ .
+Python wrapper around https://bellard.org/quickjs/ .
+
+Translates types like `str`, `float`, `bool`, `list`, `dict` and combinations
+thereof to and from Javascript.
+
+QuickJS is currently thread-hostile, so this wrapper makes sure that all calls
+to the same JS runtime comes from the same thead.
 """
 
 setup(author="Petter Strandmark",
       author_email="petter.strandmark@gmail.com",
       name='quickjs',
       url='https://github.com/PetterS/quickjs',
-      version='1.7.0',
+      version='1.8.0',
       description='Wrapping the quickjs C library.',
       long_description=long_description,
       packages=["quickjs"],
