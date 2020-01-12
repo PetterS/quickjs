@@ -1,3 +1,4 @@
+import concurrent.futures
 import json
 import unittest
 
@@ -154,6 +155,13 @@ class Context(unittest.TestCase):
 
     def test_memory_usage(self):
         self.assertIn("memory_used_size", self.context.memory().keys())
+
+    def test_json_simple(self):
+        self.assertEqual(self.context.parse_json("42"), 42)
+
+    def test_json_error(self):
+        with self.assertRaisesRegex(quickjs.JSException, "unexpected token"):
+            self.context.parse_json("a b c")
 
 
 class Object(unittest.TestCase):
@@ -367,8 +375,8 @@ class FunctionTest(unittest.TestCase):
         self.assertEqual(f(limit), limit)
 
 
-class Strings(unittest.TestCase):
-    def test_unicode(self):
+class JavascriptFeatures(unittest.TestCase):
+    def test_unicode_strings(self):
         identity = quickjs.Function(
             "identity", """
             function identity(x) {
@@ -379,3 +387,89 @@ class Strings(unittest.TestCase):
         for x in ["äpple", "≤≥", "☺"]:
             self.assertEqual(identity(x), x)
             self.assertEqual(context.eval('(function(){ return "' + x + '";})()'), x)
+
+    def test_es2020_optional_chaining(self):
+        f = quickjs.Function("f", """
+            function f(x) {
+                return x?.one?.two;
+            }
+        """)
+        self.assertIsNone(f({}))
+        self.assertIsNone(f({"one": 12}))
+        self.assertEqual(f({"one": {"two": 42}}), 42)
+
+    def test_es2020_null_coalescing(self):
+        f = quickjs.Function("f", """
+            function f(x) {
+                return x ?? 42;
+            }
+        """)
+        self.assertEqual(f(""), "")
+        self.assertEqual(f(0), 0)
+        self.assertEqual(f(11), 11)
+        self.assertEqual(f(None), 42)
+
+
+class Threads(unittest.TestCase):
+    def setUp(self):
+        self.context = quickjs.Context()
+        self.executor = concurrent.futures.ThreadPoolExecutor()
+
+    def tearDown(self):
+        self.executor.shutdown()
+
+    def test_concurrent(self):
+        """Demonstrates that the execution will crash unless the function executes on the same
+           thread every time.
+
+           If the executor in Function is not present, this test will fail.
+        """
+        data = list(range(1000))
+        jssum = quickjs.Function(
+            "sum", """
+                function sum(data) {
+                    return data.reduce((a, b) => a + b, 0)
+                }
+            """)
+
+        futures = [self.executor.submit(jssum, data) for _ in range(10)]
+        expected = sum(data)
+        for future in concurrent.futures.as_completed(futures):
+            self.assertEqual(future.result(), expected)
+
+    def test_concurrent_own_executor(self):
+        data = list(range(1000))
+        jssum1 = quickjs.Function("sum",
+                                  """
+                                    function sum(data) {
+                                        return data.reduce((a, b) => a + b, 0)
+                                    }
+                                  """,
+                                  own_executor=True)
+        jssum2 = quickjs.Function("sum",
+                                  """
+                                    function sum(data) {
+                                        return data.reduce((a, b) => a + b, 0)
+                                    }
+                                  """,
+                                  own_executor=True)
+
+        futures = [self.executor.submit(f, data) for _ in range(10) for f in (jssum1, jssum2)]
+        expected = sum(data)
+        for future in concurrent.futures.as_completed(futures):
+            self.assertEqual(future.result(), expected)
+
+
+
+class QJS(object):
+    def __init__(self):
+        self.interp = quickjs.Context()
+        self.interp.eval('var foo = "bar";')
+
+
+class QuickJSContextInClass(unittest.TestCase):
+    @unittest.expectedFailure
+    def test_github_issue_7(self):
+        # This gives stack overflow internal error, due to how QuickJS calculates stack frames.
+        qjs = QJS()
+        self.assertEqual(qjs.interp.eval('2+2'), 4)

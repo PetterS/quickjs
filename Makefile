@@ -29,5 +29,5 @@ upload: distribute
 
 clean:
 	rm -rf build/ dist/ 
-	rm *.so
-	rm *.pyd
+	rm -f *.so
+	rm -f *.pyd
