@@ -59,7 +59,8 @@ static void teardown_time_limit(ContextData *context) {
 	}
 }
 
-// Deallocate with JS_FreeCString.
+// Converts a JSValue to a C string.
+// Can return NULL. Deallocate with JS_FreeCString.
 static const char* js_to_cstring(JSContext* context, JSValue value) {
 	JSValue string = JS_ToString(context, value);
 	const char* cstring = JS_ToCString(context, string);
