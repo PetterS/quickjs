@@ -59,6 +59,14 @@ static void teardown_time_limit(ContextData *context) {
 	}
 }
 
+// Deallocate with JS_FreeCString.
+static const char* js_to_cstring(JSContext* context, JSValue value) {
+	JSValue string = JS_ToString(context, value);
+	const char* cstring = JS_ToCString(context, string);
+	JS_FreeValue(context, string);
+	return cstring;
+}
+
 // Creates an instance of the Object class.
 static PyObject *object_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
 	ObjectData *self;
@@ -198,15 +206,24 @@ static PyObject *quickjs_to_python(ContextData *context_obj, JSValue value) {
 	} else if (tag == JS_TAG_EXCEPTION) {
 		// We have a Javascript exception. We convert it to a Python exception via a C string.
 		JSValue exception = JS_GetException(context);
-		JSValue error_string = JS_ToString(context, exception);
-		const char *cstring = JS_ToCString(context, error_string);
+		const char *cstring = js_to_cstring(context, exception);
+		const char* stack_cstring = NULL;
+		if (!JS_IsNull(exception) && !JS_IsUndefined(exception)) {
+			JSValue stack = JS_GetPropertyStr(context, exception, "stack");
+			stack_cstring = js_to_cstring(context, stack);
+			JS_FreeValue(context, stack);
+		}
 		if (cstring != NULL) {
+			const char* safe_stack_cstring = stack_cstring ? stack_cstring : "";
 			if (strstr(cstring, "stack overflow") != NULL) {
-				PyErr_Format(StackOverflow, "%s", cstring);
+				PyErr_Format(StackOverflow, "%s\n%s", cstring, safe_stack_cstring);
 			} else {
-				PyErr_Format(JSException, "%s", cstring);
+				PyErr_Format(JSException, "%s\n%s", cstring, safe_stack_cstring);
 			}
 			JS_FreeCString(context, cstring);
+			if (stack_cstring != NULL) {
+				JS_FreeCString(context, stack_cstring);
+			}
 		} else {
 			// This has been observed to happen when different threads have used the same QuickJS
 			// runtime, but not at the same time.
@@ -214,7 +231,6 @@ static PyObject *quickjs_to_python(ContextData *context_obj, JSValue value) {
 			PyErr_Format(JSException,
 			             "(Failed obtaining QuickJS error string. Concurrency issue?)");
 		}
-		JS_FreeValue(context, error_string);
 		JS_FreeValue(context, exception);
 	} else if (tag == JS_TAG_FLOAT64) {
 		return_value = Py_BuildValue("d", JS_VALUE_GET_FLOAT64(value));
