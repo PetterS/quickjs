@@ -117,6 +117,13 @@ class Context(unittest.TestCase):
     def test_memory_usage(self):
         self.assertIn("memory_used_size", self.context.memory().keys())
 
+    def test_json_simple(self):
+        self.assertEqual(self.context.parse_json("42"), 42)
+
+    def test_json_error(self):
+        with self.assertRaisesRegex(quickjs.JSException, "unexpected token"):
+            self.context.parse_json("a b c")
+
 
 class Object(unittest.TestCase):
     def setUp(self):

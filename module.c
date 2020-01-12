@@ -87,19 +87,8 @@ static PyObject *object_call(ObjectData *self, PyObject *args, PyObject *kwds);
 //
 // Returns the JSON representation of the object as a Python string.
 static PyObject *object_json(ObjectData *self) {
-	// Use the JS JSON.stringify method to convert to JSON. First, we need to retrieve it via
-	// API calls.
 	JSContext *context = self->context->context;
-	JSValue global = JS_GetGlobalObject(context);
-	JSValue JSON = JS_GetPropertyStr(context, global, "JSON");
-	JSValue stringify = JS_GetPropertyStr(context, JSON, "stringify");
-
-	JSValueConst args[1] = {self->object};
-	JSValue json_string = JS_Call(context, stringify, JSON, 1, args);
-
-	JS_FreeValue(context, global);
-	JS_FreeValue(context, JSON);
-	JS_FreeValue(context, stringify);
+	JSValue json_string = JS_JSONStringify(context, self->object, JS_UNDEFINED, JS_UNDEFINED);
 	return quickjs_to_python(self->context, json_string);
 }
 
@@ -319,6 +308,22 @@ static PyObject *context_module(ContextData *self, PyObject *args) {
 	return context_eval_internal(self, args, JS_EVAL_TYPE_MODULE);
 }
 
+// _quickjs.Context.parse_json
+//
+// Evaluates a Python string as JSON and returns the result as a Python object. Will
+// return _quickjs.Object for complex types (other than e.g. str, int).
+static PyObject *context_parse_json(ContextData *self, PyObject *args) {
+	const char *data;
+	if (!PyArg_ParseTuple(args, "s", &data)) {
+		return NULL;
+	}
+	JSValue value;
+	Py_BEGIN_ALLOW_THREADS;
+	value = JS_ParseJSON(self->context, data, strlen(data), "context_parse_json.json");
+	Py_END_ALLOW_THREADS;
+	return quickjs_to_python(self, value);
+}
+
 // _quickjs.Context.get
 //
 // Retrieves a global variable from the JS context.
@@ -436,6 +441,7 @@ static PyMethodDef context_methods[] = {
      (PyCFunction)context_module,
      METH_VARARGS,
      "Evaluates a Javascript string as a module."},
+    {"parse_json", (PyCFunction)context_parse_json, METH_VARARGS, "Parses a JSON string."},
     {"get", (PyCFunction)context_get, METH_VARARGS, "Gets a Javascript global variable."},
     {"set_memory_limit",
      (PyCFunction)context_set_memory_limit,

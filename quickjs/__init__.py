@@ -85,7 +85,7 @@ class Function:
                 return arg
             else:
                 # More complex objects are passed through JSON.
-                return self._context.eval("(" + json.dumps(arg) + ")")
+                return self._context.parse_json(json.dumps(arg))
 
         try:
             result = self._f(*[convert_arg(a) for a in args])
