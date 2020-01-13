@@ -59,18 +59,6 @@ static void teardown_time_limit(ContextData *context) {
 	}
 }
 
-// Converts a JSValue to a C string.
-// Can return NULL. Deallocate with JS_FreeCString.
-static const char* js_to_cstring(JSContext* context, JSValue value) {
-	JSValue string = JS_ToString(context, value);
-	if (JS_IsException(string)) {
-		return NULL;
-	}
-	const char* cstring = JS_ToCString(context, string);
-	JS_FreeValue(context, string);
-	return cstring;
-}
-
 // Creates an instance of the Object class.
 static PyObject *object_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
 	ObjectData *self;
@@ -210,12 +198,12 @@ static PyObject *quickjs_to_python(ContextData *context_obj, JSValue value) {
 	} else if (tag == JS_TAG_EXCEPTION) {
 		// We have a Javascript exception. We convert it to a Python exception via a C string.
 		JSValue exception = JS_GetException(context);
-		const char *cstring = js_to_cstring(context, exception);
+		const char *cstring = JS_ToCString(context, exception);
 		const char* stack_cstring = NULL;
 		if (!JS_IsNull(exception) && !JS_IsUndefined(exception)) {
 			JSValue stack = JS_GetPropertyStr(context, exception, "stack");
 			if (!JS_IsException(stack)) {
-				stack_cstring = js_to_cstring(context, stack);
+				stack_cstring = JS_ToCString(context, stack);
 				JS_FreeValue(context, stack);
 			}
 		}
@@ -226,7 +214,6 @@ static PyObject *quickjs_to_python(ContextData *context_obj, JSValue value) {
 			} else {
 				PyErr_Format(JSException, "%s\n%s", cstring, safe_stack_cstring);
 			}
-			JS_FreeCString(context, cstring);
 		} else {
 			// This has been observed to happen when different threads have used the same QuickJS
 			// runtime, but not at the same time.
@@ -234,9 +221,8 @@ static PyObject *quickjs_to_python(ContextData *context_obj, JSValue value) {
 			PyErr_Format(JSException,
 			             "(Failed obtaining QuickJS error string. Concurrency issue?)");
 		}
-		if (stack_cstring != NULL) {
-			JS_FreeCString(context, stack_cstring);
-		}
+		JS_FreeCString(context, cstring);
+		JS_FreeCString(context, stack_cstring);
 		JS_FreeValue(context, exception);
 	} else if (tag == JS_TAG_FLOAT64) {
 		return_value = Py_BuildValue("d", JS_VALUE_GET_FLOAT64(value));
