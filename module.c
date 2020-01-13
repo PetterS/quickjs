@@ -62,6 +62,9 @@ static void teardown_time_limit(ContextData *context) {
 // Converts a JSValue to a C string.
 // Can return NULL. Deallocate with JS_FreeCString.
 static const char* js_to_cstring(JSContext* context, JSValue value) {
+	if (JS_IsException(value)) {
+		return NULL;
+	}
 	JSValue string = JS_ToString(context, value);
 	const char* cstring = JS_ToCString(context, string);
 	JS_FreeValue(context, string);
@@ -211,8 +214,10 @@ static PyObject *quickjs_to_python(ContextData *context_obj, JSValue value) {
 		const char* stack_cstring = NULL;
 		if (!JS_IsNull(exception) && !JS_IsUndefined(exception)) {
 			JSValue stack = JS_GetPropertyStr(context, exception, "stack");
-			stack_cstring = js_to_cstring(context, stack);
-			JS_FreeValue(context, stack);
+			if (!JS_IsException(stack)) {
+				stack_cstring = js_to_cstring(context, stack);
+				JS_FreeValue(context, stack);
+			}
 		}
 		if (cstring != NULL) {
 			const char* safe_stack_cstring = stack_cstring ? stack_cstring : "";
