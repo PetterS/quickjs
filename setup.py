@@ -1,10 +1,11 @@
 import glob
 import sys
+from typing import List
 
 from setuptools import setup, Extension
 
-CONFIG_VERSION = '2020-01-05'
-extra_link_args = []
+CONFIG_VERSION = '2020-01-19'
+extra_link_args: List[str] = []
 
 if sys.platform == "win32":
     # To build for Windows:
@@ -54,7 +55,7 @@ setup(author="Petter Strandmark",
       author_email="petter.strandmark@gmail.com",
       name='quickjs',
       url='https://github.com/PetterS/quickjs',
-      version='1.8.1',
+      version='1.9.0',
       description='Wrapping the quickjs C library.',
       long_description=long_description,
       packages=["quickjs"],
