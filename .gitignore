@@ -4,3 +4,6 @@ dist
 quickjs.egg-info
 *.so
 *.pyd
+*.o
+fuzz-output
+fuzz-target
