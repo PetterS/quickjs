@@ -120,6 +120,25 @@ class Context(unittest.TestCase):
         # The context has left the scope after f. f needs to keep the context alive for the
         # its lifetime. Otherwise, we will get problems.
 
+    def test_backtrace(self):
+        try:
+            self.context.eval("""
+                function funcA(x) {
+                    x.a.b = 1;
+                }
+                function funcB(x) {
+                    funcA(x);
+                }
+                funcB({});
+            """)
+        except Exception as e:
+            msg = str(e)
+        else:
+            self.fail("Expected exception.")
+        
+        self.assertIn("at funcA (<input>:3)\n", msg)
+        self.assertIn("at funcB (<input>:6)\n", msg)
+
     def test_memory_limit(self):
         code = """
             (function() {
