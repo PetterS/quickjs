@@ -78,10 +78,10 @@ class Context(unittest.TestCase):
     def _module_loader(self, name):
         """Helper method that for module loading."""
 
-        if name == "petter":
+        if name == "mymodule":
             return """
                 export function foo() {
-                    return 40;
+                    return 42;
                 }
             """
         else:
@@ -95,11 +95,15 @@ class Context(unittest.TestCase):
     def test_import_module(self):
         self.context.set_module_loader(self._module_loader)
         self.context.module("""
-            import { foo } from "petter";
-            (function test() {
+            import { foo } from "mymodule";
+
+            function test() {
                 return foo();
-            })()
+            }
+
+            globalThis.test = test;
         """)
+        self.assertEqual(self.context.get("test")(), 42)
 
     def test_error(self):
         with self.assertRaisesRegex(quickjs.JSException, "ReferenceError: missing is not defined"):
@@ -276,6 +280,15 @@ class Object(unittest.TestCase):
         d = context2.eval("({a: 1})")
         with self.assertRaisesRegex(ValueError, "Can not mix JS objects from different contexts."):
             f(d)
+
+    def test_dir(self):
+        d = self.context.eval("({a: 1, b: 2})")
+        self.assertEqual(d.dir(), ["a", "b"])
+
+    def test_get(self):
+        d = self.context.eval("({a: 1, b: 2})")
+        self.assertEqual(d.get("a"), 1)
+        self.assertEqual(d.get("b"), 2)
 
 
 class FunctionTest(unittest.TestCase):

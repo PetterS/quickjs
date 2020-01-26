@@ -121,9 +121,41 @@ static PyObject *object_json(ObjectData *self) {
 	return quickjs_to_python(self->context, json_string);
 }
 
+// _quickjs.Object.get
+//
+// Retrieves a property from the JS object.
+static PyObject *object_get(ObjectData *self, PyObject *args) {
+	const char *name;
+	if (!PyArg_ParseTuple(args, "s", &name)) {
+		return NULL;
+	}
+	JSValue value = JS_GetPropertyStr(self->context->context, self->object, name);
+	return quickjs_to_python(self->context, value);
+}
+
+// _quickjs.Object.dir
+//
+// Returns a list of all properties of a JS object.
+static PyObject *object_dir(ObjectData *self) {
+	JSPropertyEnum* props = 0;
+	uint32_t len;
+	JS_GetOwnPropertyNames(self->context->context, &props, &len, self->object, JS_GPN_STRING_MASK);
+
+	PyObject* list = PyList_New(len);
+	for (int i=0; i<len; ++i) {
+		const char* prop = JS_AtomToCString(self->context->context, props[i].atom);
+		PyList_SetItem(list, i, Py_BuildValue("s", prop));
+		JS_FreeCString(self->context->context, prop);
+	}
+	js_free(self->context->context, props);
+	return list;
+}
+
 // All methods of the _quickjs.Object class.
 static PyMethodDef object_methods[] = {
     {"json", (PyCFunction)object_json, METH_NOARGS, "Converts to a JSON string."},
+	{"get", (PyCFunction)object_get, METH_VARARGS, "Retrieves a property."},
+	{"dir", (PyCFunction)object_dir, METH_NOARGS, "Returns a list of all properties."},
     {NULL} /* Sentinel */
 };
 
