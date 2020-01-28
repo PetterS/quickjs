@@ -21,7 +21,7 @@ if sys.platform == "win32":
     CONFIG_VERSION = f'\\"{CONFIG_VERSION}\\"'
     # Make sure that pthreads is linked statically, otherwise we run into problems
     # on computers where it is not installed.
-    extra_link_args = ["-Wl,-Bstatic", "-lpthread"]
+    extra_link_args = ["-Wl,-Bstatic", "-lpthread", "-static"]
 else:
     CONFIG_VERSION = f'"{CONFIG_VERSION}"'
 
@@ -39,6 +39,7 @@ _quickjs = Extension(
     # HACK.
     # See https://github.com/pypa/packaging-problems/issues/84.
     sources=get_c_sources(include_headers=("sdist" in sys.argv)),
+    extra_compile_args=["-static", "-static-libgcc", "-static-libstdc++"],
     extra_link_args=extra_link_args)
 
 long_description = """
@@ -55,7 +56,7 @@ setup(author="Petter Strandmark",
       author_email="petter.strandmark@gmail.com",
       name='quickjs',
       url='https://github.com/PetterS/quickjs',
-      version='1.9.0',
+      version='1.10.0',
       description='Wrapping the quickjs C library.',
       long_description=long_description,
       packages=["quickjs"],
