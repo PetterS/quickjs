@@ -21,7 +21,7 @@ if sys.platform == "win32":
     CONFIG_VERSION = f'\\"{CONFIG_VERSION}\\"'
     # Make sure that pthreads is linked statically, otherwise we run into problems
     # on computers where it is not installed.
-    extra_link_args = ["-Wl,-Bstatic", "-lpthread", "-static"]
+    extra_link_args = ["-static"]
 else:
     CONFIG_VERSION = f'"{CONFIG_VERSION}"'
 
