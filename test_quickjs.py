@@ -144,6 +144,62 @@ class Context(unittest.TestCase):
             self.context.parse_json("a b c")
 
 
+class CallIntoPython(unittest.TestCase):
+    def setUp(self):
+        self.context = quickjs.Context()
+
+    def test_make_function(self):
+        f = self.context.make_function(lambda x: x + 2)
+        self.assertEqual(f(40), 42)
+
+    def test_make_two_functions(self):
+        for i in range(10):
+            f = self.context.make_function(lambda x: x + 2)
+            g = self.context.make_function(lambda x: x + 40)
+            self.assertEqual(f(40), 42)
+            self.assertEqual(g(2), 42)
+            self.assertEqual(self.context.eval("((f, a) => f(a))")(f, 40), 42)
+        
+    def test_make_function_call_from_js(self):
+        f = self.context.make_function(lambda x: x + 2)
+        g = self.context.eval("""(
+            function(f) {
+                return f(20) + 20;
+            }
+        )""")
+        self.assertEqual(g(f), 42)
+        self.assertEqual(self.context.eval("((g, f) => g(f))")(g, f), 42)
+
+    def test_python_function_raises(self):
+        def error(a):
+            raise ValueError("A")
+
+        f = self.context.make_function(error)
+        with self.assertRaisesRegex(quickjs.JSException, "Python call failed"):
+            f(42)
+
+
+    def test_make_function_two_args(self):
+        def concat(a, b):
+            return a + b
+        
+        f = self.context.make_function(concat)
+        result = f(40, 2)
+        self.assertEqual(result, 42)
+
+        result = self.context.eval("((f, a, b) => 22 + f(a, b))")(f, 10, 10)
+        self.assertEqual(result, 42)
+
+    def test_make_function_two_string_args(self):
+        """Without the JS_DupValue in js_c_function, this test crashes."""
+        def concat(a, b):
+            return a + "-" + b
+        
+        f = self.context.make_function(concat)
+        result = f("aaa", "bbb")
+        self.assertEqual(result, "aaa-bbb")
+
+
 class Object(unittest.TestCase):
     def setUp(self):
         self.context = quickjs.Context()
