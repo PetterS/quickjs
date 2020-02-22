@@ -536,9 +536,10 @@ static JSValue js_c_function(
 	return js_result;
 }
 
-static PyObject *context_make_function(ContextData *self, PyObject *args) {
+static PyObject *context_add_callable(ContextData *self, PyObject *args) {
+	const char *name;
 	PyObject *callable;
-	if (!PyArg_ParseTuple(args, "O", &callable)) {
+	if (!PyArg_ParseTuple(args, "sO", &name, &callable)) {
 		return NULL;
 	}
 	if (!PyCallable_Check(callable)) {
@@ -567,7 +568,10 @@ static PyObject *context_make_function(ContextData *self, PyObject *args) {
 	    1,  // TODO: Should we allow setting the .length of the function to something other than 1?
 	    JS_CFUNC_generic_magic,
 	    node->magic);
-	return quickjs_to_python(self, function);
+	JSValue global = JS_GetGlobalObject(self->context);
+	JS_SetPropertyStr(self->context, global, name, function);
+	JS_FreeValue(self->context, global);
+	Py_RETURN_NONE;
 }
 
 // All methods of the _quickjs.Context class.
@@ -593,7 +597,7 @@ static PyMethodDef context_methods[] = {
      "Sets the maximum stack size in bytes. Default is 256kB."},
     {"memory", (PyCFunction)context_memory, METH_NOARGS, "Returns the memory usage as a dict."},
     {"gc", (PyCFunction)context_gc, METH_NOARGS, "Runs garbage collection."},
-    {"make_function", (PyCFunction)context_make_function, METH_VARARGS, "Wraps a Python callable."},
+    {"add_callable", (PyCFunction)context_add_callable, METH_VARARGS, "Wraps a Python callable."},
     {NULL} /* Sentinel */
 };
 

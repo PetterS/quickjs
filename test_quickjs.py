@@ -149,45 +149,47 @@ class CallIntoPython(unittest.TestCase):
         self.context = quickjs.Context()
 
     def test_make_function(self):
-        f = self.context.make_function(lambda x: x + 2)
-        self.assertEqual(f(40), 42)
+        self.context.add_callable("f", lambda x: x + 2)
+        self.assertEqual(self.context.eval("f(40)"), 42)
 
     def test_make_two_functions(self):
         for i in range(10):
-            f = self.context.make_function(lambda x: x + 2)
-            g = self.context.make_function(lambda x: x + 40)
-            self.assertEqual(f(40), 42)
-            self.assertEqual(g(2), 42)
-            self.assertEqual(self.context.eval("((f, a) => f(a))")(f, 40), 42)
+            self.context.add_callable("f", lambda x: i + x + 2)
+            self.context.add_callable("g", lambda x: i + x + 40)
+            f = self.context.get("f")
+            g = self.context.get("g")
+            self.assertEqual(f(40) - i, 42)
+            self.assertEqual(g(2) - i, 42)
+            self.assertEqual(self.context.eval("((f, a) => f(a))")(f, 40) - i, 42)
         
     def test_make_function_call_from_js(self):
-        f = self.context.make_function(lambda x: x + 2)
+        f = self.context.add_callable("f", lambda x: x + 2)
         g = self.context.eval("""(
-            function(f) {
+            function() {
                 return f(20) + 20;
             }
         )""")
-        self.assertEqual(g(f), 42)
-        self.assertEqual(self.context.eval("((g, f) => g(f))")(g, f), 42)
+        self.assertEqual(g(), 42)
 
     def test_python_function_raises(self):
         def error(a):
             raise ValueError("A")
 
-        f = self.context.make_function(error)
+        self.context.add_callable("error", error)
         with self.assertRaisesRegex(quickjs.JSException, "Python call failed"):
-            f(42)
+            self.context.eval("error(0)")
 
 
     def test_make_function_two_args(self):
         def concat(a, b):
             return a + b
         
-        f = self.context.make_function(concat)
-        result = f(40, 2)
+        self.context.add_callable("concat", concat)
+        result = self.context.eval("concat(40, 2)")
         self.assertEqual(result, 42)
 
-        result = self.context.eval("((f, a, b) => 22 + f(a, b))")(f, 10, 10)
+        concat = self.context.get("concat")
+        result = self.context.eval("((f, a, b) => 22 + f(a, b))")(concat, 10, 10)
         self.assertEqual(result, 42)
 
     def test_make_function_two_string_args(self):
@@ -195,20 +197,21 @@ class CallIntoPython(unittest.TestCase):
         def concat(a, b):
             return a + "-" + b
         
-        f = self.context.make_function(concat)
-        result = f("aaa", "bbb")
+        self.context.add_callable("concat", concat)
+        concat = self.context.get("concat")
+        result = concat("aaa", "bbb")
         self.assertEqual(result, "aaa-bbb")
 
     def test_can_not_eval_in_same_context(self):
-        f = self.context.make_function(lambda: self.context.eval("1 + 1"))
+        self.context.add_callable("f", lambda: self.context.eval("1 + 1"))
         with self.assertRaisesRegex(quickjs.JSException, "Python call failed"):
-            f()
+            self.context.eval("f()")
 
     def test_can_not_call_in_same_context(self):
-        f = self.context.eval("(function() { return 42; })")
-        g = self.context.make_function(lambda: f())
+        inner = self.context.eval("(function() { return 42; })")
+        self.context.add_callable("f", lambda: inner())
         with self.assertRaisesRegex(quickjs.JSException, "Python call failed"):
-            g()
+            self.context.eval("f()")
 
 
 class Object(unittest.TestCase):
@@ -420,6 +423,17 @@ class FunctionTest(unittest.TestCase):
             f(limit)
         f.set_max_stack_size(2000 * limit)
         self.assertEqual(f(limit), limit)
+
+    def test_add_callable(self):
+        f = quickjs.Function(
+            "f", """
+            function f() {
+                return pfunc();
+            }
+        """)
+        f.add_callable("pfunc", lambda: 42)
+
+        self.assertEqual(f(), 42)
 
 
 class JavascriptFeatures(unittest.TestCase):
