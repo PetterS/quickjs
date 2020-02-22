@@ -1,6 +1,5 @@
-#include <time.h>
-
 #include <Python.h>
+#include <time.h>
 
 #include "third-party/quickjs.h"
 
@@ -12,13 +11,27 @@ struct PythonCallableNode {
 	PythonCallableNode *next;
 };
 
+// Keeps track of the time if we are using a time limit.
+typedef struct {
+	clock_t start;
+	clock_t limit;
+} InterruptData;
+
 // The data of the type _quickjs.Context.
 typedef struct {
 	PyObject_HEAD JSRuntime *runtime;
 	JSContext *context;
 	int has_time_limit;
 	clock_t time_limit;
+	// Whether we can release the GIL. If we have added a custom Python function this is not
+	// possible.
 	int can_release_gil;
+	// Used when releasing the GIL.
+	PyThreadState *thread_state;
+	// To prevent Python → JS → Python → JS. Hard to reason whether that would always work.
+	// Perhaps it would.
+	int already_running_js;
+	InterruptData interrupt_data;
 	PythonCallableNode *python_callables;
 } ContextData;
 
@@ -36,12 +49,6 @@ static PyObject *StackOverflow = NULL;
 //
 // Takes ownership of the JSValue and will deallocate it (refcount reduced by 1).
 static PyObject *quickjs_to_python(ContextData *context_obj, JSValue value);
-
-// Keeps track of the time if we are using a time limit.
-typedef struct {
-	clock_t start;
-	clock_t limit;
-} InterruptData;
 
 // Returns nonzero if we should stop due to a time limit.
 static int js_interrupt_handler(JSRuntime *rt, void *opaque) {
@@ -67,6 +74,31 @@ static void teardown_time_limit(ContextData *context) {
 	if (context->has_time_limit) {
 		JS_SetInterruptHandler(context->runtime, NULL, NULL);
 	}
+}
+
+static int prepare_call_js(ContextData *self) {
+	if (self->already_running_js) {
+		PyErr_Format(PyExc_ValueError, "Can not recursively call into JS from Python.");
+		return 0;
+	}
+	self->already_running_js = 1;
+
+	// We release the GIL in order to speed things up for certain use cases.
+	self->thread_state = 0;
+	if (self->can_release_gil) {
+		self->thread_state = PyEval_SaveThread();
+	}
+	setup_time_limit(self, &self->interrupt_data);
+	return 1;
+}
+
+static void end_call_js(ContextData *self) {
+	teardown_time_limit(self);
+	if (self->thread_state) {
+		PyEval_RestoreThread(self->thread_state);
+	}
+	self->thread_state = 0;
+	self->already_running_js = 0;
 }
 
 // Creates an instance of the Object class.
@@ -186,27 +218,16 @@ static PyObject *object_call(ObjectData *self, PyObject *args, PyObject *kwds) {
 		jsargs[i] = python_to_quickjs(self->context, item);
 	}
 
-	// Perform the actual function call. We release the GIL in order to speed things up for certain
-	// use cases. If this module becomes more complicated and gains the capability to call Python
-	// function from JS, this needs to be reversed or improved.
-	JSValue value;
-	PyThreadState *save = 0;
-	if (self->context->can_release_gil) {
-		save = PyEval_SaveThread();
+	if (!prepare_call_js(self->context)) {
+		return NULL;
 	}
-
-	InterruptData interrupt_data;
-	setup_time_limit(self->context, &interrupt_data);
+	JSValue value;
 	value = JS_Call(self->context->context, self->object, JS_NULL, nargs, jsargs);
-	teardown_time_limit(self->context);
 	for (int i = 0; i < nargs; ++i) {
 		JS_FreeValue(self->context->context, jsargs[i]);
 	}
 	free(jsargs);
-
-	if (save) {
-		PyEval_RestoreThread(save);
-	}
+	end_call_js(self->context);
 	return quickjs_to_python(self->context, value);
 }
 
@@ -302,6 +323,8 @@ static PyObject *context_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 		self->has_time_limit = 0;
 		self->time_limit = 0;
 		self->can_release_gil = 1;
+		self->thread_state = 0;
+		self->already_running_js = 0;
 		self->python_callables = NULL;
 		JS_SetContextOpaque(self->context, self);
 	}
@@ -330,22 +353,12 @@ static PyObject *context_eval_internal(ContextData *self, PyObject *args, int ev
 	if (!PyArg_ParseTuple(args, "s", &code)) {
 		return NULL;
 	}
-
-	// Perform the actual evaluation. We release the GIL in order to speed things up for certain
-	// use cases. If this module becomes more complicated and gains the capability to call Python
-	// function from JS, this needs to be reversed or improved.
+	if (!prepare_call_js(self)) {
+		return NULL;
+	}
 	JSValue value;
-	PyThreadState *save = 0;
-	if (self->can_release_gil) {
-		save = PyEval_SaveThread();
-	}
-	InterruptData interrupt_data;
-	setup_time_limit(self, &interrupt_data);
 	value = JS_Eval(self->context, code, strlen(code), "<input>", eval_type);
-	teardown_time_limit(self);
-	if (save) {
-		PyEval_RestoreThread(save);
-	}
+	end_call_js(self);
 	return quickjs_to_python(self, value);
 }
 

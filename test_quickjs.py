@@ -199,6 +199,17 @@ class CallIntoPython(unittest.TestCase):
         result = f("aaa", "bbb")
         self.assertEqual(result, "aaa-bbb")
 
+    def test_can_not_eval_in_same_context(self):
+        f = self.context.make_function(lambda: self.context.eval("1 + 1"))
+        with self.assertRaisesRegex(quickjs.JSException, "Python call failed"):
+            f()
+
+    def test_can_not_call_in_same_context(self):
+        f = self.context.eval("(function() { return 42; })")
+        g = self.context.make_function(lambda: f())
+        with self.assertRaisesRegex(quickjs.JSException, "Python call failed"):
+            g()
+
 
 class Object(unittest.TestCase):
     def setUp(self):
