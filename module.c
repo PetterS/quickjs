@@ -76,6 +76,8 @@ static void teardown_time_limit(ContextData *context) {
 	}
 }
 
+// This method is always called in a context before running JS code in QuickJS. It sets up time
+// limites, releases the GIL etc.
 static int prepare_call_js(ContextData *self) {
 	if (self->already_running_js) {
 		PyErr_Format(PyExc_ValueError, "Can not recursively call into JS from Python.");
@@ -92,6 +94,7 @@ static int prepare_call_js(ContextData *self) {
 	return 1;
 }
 
+// This method is called right after returning from running JS code. Aquires the GIL etc.
 static void end_call_js(ContextData *self) {
 	teardown_time_limit(self);
 	if (self->thread_state) {
@@ -154,10 +157,15 @@ static PyTypeObject Object = {PyVarObject_HEAD_INIT(NULL, 0).tp_name = "_quickjs
 // Whether converting item to QuickJS would be possible.
 static int python_to_quickjs_possible(ContextData *context, PyObject *item) {
 	if (PyBool_Check(item)) {
+		return 1;
 	} else if (PyLong_Check(item)) {
+		return 1;
 	} else if (PyFloat_Check(item)) {
+		return 1;
 	} else if (item == Py_None) {
+		return 1;
 	} else if (PyUnicode_Check(item)) {
+		return 1;
 	} else if (PyObject_IsInstance(item, (PyObject *)&Object)) {
 		ObjectData *object = (ObjectData *)item;
 		if (object->context != context) {
@@ -170,11 +178,9 @@ static int python_to_quickjs_possible(ContextData *context, PyObject *item) {
 		             Py_TYPE(item)->tp_name);
 		return 0;
 	}
-	return 1;
 }
 
-// Whether converting item to QuickJS would be possible. Should succeed if
-// python_to_quickjs_possible returns true.
+// Converts item to QuickJS Should succeed if python_to_quickjs_possible returns true.
 static JSValueConst python_to_quickjs(ContextData *context, PyObject *item) {
 	if (PyBool_Check(item)) {
 		return JS_MKVAL(JS_TAG_BOOL, item == Py_True ? 1 : 0);
