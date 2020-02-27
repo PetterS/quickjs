@@ -3,6 +3,7 @@
 #include <Python.h>
 
 #include "third-party/quickjs.h"
+#include "third-party/quickjs-libc.h"
 
 // The data of the type _quickjs.Context.
 typedef struct {
@@ -269,6 +270,8 @@ static PyObject *context_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 		self->context = JS_NewContext(self->runtime);
 		self->has_time_limit = 0;
 		self->time_limit = 0;
+
+		JS_SetModuleLoaderFunc(self->runtime, NULL, js_module_loader, NULL);
 	}
 	return (PyObject *)self;
 }

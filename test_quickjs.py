@@ -56,11 +56,17 @@ class Context(unittest.TestCase):
         self.assertEqual(self.context.get("z"), None)
 
     def test_module(self):
-        self.context.module("""   
+        self.context.module("""
+            import { value } from "./test_module.js";
             export function test() {
-                return 42;
+                return value();
             }
+
+            // export to the global context scope.
+            globalThis.test = test;
         """)
+        test = self.context.get("test")
+        self.assertEqual(test(), 42)
 
     def test_error(self):
         with self.assertRaisesRegex(quickjs.JSException, "ReferenceError: missing is not defined"):
