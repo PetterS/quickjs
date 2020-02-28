@@ -7,6 +7,7 @@
 typedef struct PythonCallableNode PythonCallableNode;
 struct PythonCallableNode {
 	PyObject *obj;
+	// Internal ID of the callable function. "magic" is QuickJS terminology.
 	int magic;
 	PythonCallableNode *next;
 };
@@ -32,6 +33,7 @@ typedef struct {
 	// Perhaps it would.
 	int already_running_js;
 	InterruptData interrupt_data;
+	// NULL-terminated singly linked list of callable Python objects that we need to keep alive.
 	PythonCallableNode *python_callables;
 } ContextData;
 
@@ -78,30 +80,30 @@ static void teardown_time_limit(ContextData *context) {
 
 // This method is always called in a context before running JS code in QuickJS. It sets up time
 // limites, releases the GIL etc.
-static int prepare_call_js(ContextData *self) {
-	if (self->already_running_js) {
+static int prepare_call_js(ContextData *context) {
+	if (context->already_running_js) {
 		PyErr_Format(PyExc_ValueError, "Can not recursively call into JS from Python.");
 		return 0;
 	}
-	self->already_running_js = 1;
+	context->already_running_js = 1;
 
 	// We release the GIL in order to speed things up for certain use cases.
-	self->thread_state = 0;
-	if (self->can_release_gil) {
-		self->thread_state = PyEval_SaveThread();
+	context->thread_state = NULL;
+	if (context->can_release_gil) {
+		context->thread_state = PyEval_SaveThread();
 	}
-	setup_time_limit(self, &self->interrupt_data);
+	setup_time_limit(context, &context->interrupt_data);
 	return 1;
 }
 
 // This method is called right after returning from running JS code. Aquires the GIL etc.
-static void end_call_js(ContextData *self) {
-	teardown_time_limit(self);
-	if (self->thread_state) {
-		PyEval_RestoreThread(self->thread_state);
+static void end_call_js(ContextData *context) {
+	teardown_time_limit(context);
+	if (context->thread_state) {
+		PyEval_RestoreThread(context->thread_state);
 	}
-	self->thread_state = 0;
-	self->already_running_js = 0;
+	context->thread_state = NULL;
+	context->already_running_js = 0;
 }
 
 // Creates an instance of the Object class.
@@ -180,7 +182,10 @@ static int python_to_quickjs_possible(ContextData *context, PyObject *item) {
 	}
 }
 
-// Converts item to QuickJS Should succeed if python_to_quickjs_possible returns true.
+// Converts item to QuickJS.
+//
+// If the Python object is not possible to convert to JS, undefined will be returned. This fallback
+// will not be used if python_to_quickjs_possible returns 1.
 static JSValueConst python_to_quickjs(ContextData *context, PyObject *item) {
 	if (PyBool_Check(item)) {
 		return JS_MKVAL(JS_TAG_BOOL, item == Py_True ? 1 : 0);
@@ -329,7 +334,7 @@ static PyObject *context_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 		self->has_time_limit = 0;
 		self->time_limit = 0;
 		self->can_release_gil = 1;
-		self->thread_state = 0;
+		self->thread_state = NULL;
 		self->already_running_js = 0;
 		self->python_callables = NULL;
 		JS_SetContextOpaque(self->context, self);
@@ -575,6 +580,7 @@ static PyObject *context_add_callable(ContextData *self, PyObject *args) {
 	    JS_CFUNC_generic_magic,
 	    node->magic);
 	JSValue global = JS_GetGlobalObject(self->context);
+	// If this fails we don't notify the caller of this function.
 	JS_SetPropertyStr(self->context, global, name, function);
 	JS_FreeValue(self->context, global);
 	Py_RETURN_NONE;
