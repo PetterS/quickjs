@@ -581,9 +581,14 @@ static PyObject *context_add_callable(ContextData *self, PyObject *args) {
 	    node->magic);
 	JSValue global = JS_GetGlobalObject(self->context);
 	// If this fails we don't notify the caller of this function.
-	JS_SetPropertyStr(self->context, global, name, function);
+	int ret = JS_SetPropertyStr(self->context, global, name, function);
 	JS_FreeValue(self->context, global);
-	Py_RETURN_NONE;
+	if (ret != 1) {
+		PyErr_SetString(PyExc_TypeError, "Failed adding the callable.");
+		return NULL;
+	} else {
+		Py_RETURN_NONE;
+	}
 }
 
 // All methods of the _quickjs.Context class.
