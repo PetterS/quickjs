@@ -24,14 +24,8 @@ typedef struct {
 	JSContext *context;
 	int has_time_limit;
 	clock_t time_limit;
-	// Whether we can release the GIL. If we have added a custom Python function this is not
-	// possible.
-	int can_release_gil;
 	// Used when releasing the GIL.
 	PyThreadState *thread_state;
-	// To prevent Python → JS → Python → JS. Hard to reason whether that would always work.
-	// Perhaps it would.
-	int already_running_js;
 	InterruptData interrupt_data;
 	// NULL-terminated singly linked list of callable Python objects that we need to keep alive.
 	PythonCallableNode *python_callables;
@@ -80,30 +74,32 @@ static void teardown_time_limit(ContextData *context) {
 
 // This method is always called in a context before running JS code in QuickJS. It sets up time
 // limites, releases the GIL etc.
-static int prepare_call_js(ContextData *context) {
-	if (context->already_running_js) {
-		PyErr_Format(PyExc_ValueError, "Can not recursively call into JS from Python.");
-		return 0;
-	}
-	context->already_running_js = 1;
-
+static void prepare_call_js(ContextData *context) {
 	// We release the GIL in order to speed things up for certain use cases.
-	context->thread_state = NULL;
-	if (context->can_release_gil) {
-		context->thread_state = PyEval_SaveThread();
-	}
+	assert(!context->thread_state);
+	context->thread_state = PyEval_SaveThread();
 	setup_time_limit(context, &context->interrupt_data);
-	return 1;
 }
 
 // This method is called right after returning from running JS code. Aquires the GIL etc.
 static void end_call_js(ContextData *context) {
 	teardown_time_limit(context);
-	if (context->thread_state) {
-		PyEval_RestoreThread(context->thread_state);
-	}
+	assert(context->thread_state);
+	PyEval_RestoreThread(context->thread_state);
 	context->thread_state = NULL;
-	context->already_running_js = 0;
+}
+
+// Called when Python is called again from inside QuickJS.
+static void prepare_call_python(ContextData *context) {
+	assert(context->thread_state);
+	PyEval_RestoreThread(context->thread_state);
+	context->thread_state = NULL;
+}
+
+// Called when the operation started by prepare_call_python is done.
+static void end_call_python(ContextData *context) {
+	assert(!context->thread_state);
+	context->thread_state = PyEval_SaveThread();
 }
 
 // Creates an instance of the Object class.
@@ -174,6 +170,7 @@ static int python_to_quickjs_possible(ContextData *context, PyObject *item) {
 			PyErr_Format(PyExc_ValueError, "Can not mix JS objects from different contexts.");
 			return 0;
 		}
+		return 1;
 	} else {
 		PyErr_Format(PyExc_TypeError,
 		             "Unsupported type when converting a Python object to quickjs: %s.",
@@ -229,9 +226,7 @@ static PyObject *object_call(ObjectData *self, PyObject *args, PyObject *kwds) {
 		jsargs[i] = python_to_quickjs(self->context, item);
 	}
 
-	if (!prepare_call_js(self->context)) {
-		return NULL;
-	}
+	prepare_call_js(self->context);
 	JSValue value;
 	value = JS_Call(self->context->context, self->object, JS_NULL, nargs, jsargs);
 	for (int i = 0; i < nargs; ++i) {
@@ -333,9 +328,7 @@ static PyObject *context_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 		self->context = JS_NewContext(self->runtime);
 		self->has_time_limit = 0;
 		self->time_limit = 0;
-		self->can_release_gil = 1;
 		self->thread_state = NULL;
-		self->already_running_js = 0;
 		self->python_callables = NULL;
 		JS_SetContextOpaque(self->context, self);
 	}
@@ -364,9 +357,7 @@ static PyObject *context_eval_internal(ContextData *self, PyObject *args, int ev
 	if (!PyArg_ParseTuple(args, "s", &code)) {
 		return NULL;
 	}
-	if (!prepare_call_js(self)) {
-		return NULL;
-	}
+	prepare_call_js(self);
 	JSValue value;
 	value = JS_Eval(self->context, code, strlen(code), "<input>", eval_type);
 	end_call_js(self);
@@ -524,9 +515,11 @@ static JSValue js_c_function(
 	if (!node) {
 		return JS_ThrowInternalError(self->context, "Internal error.");
 	}
+	prepare_call_python(self);
 
 	PyObject *args = PyTuple_New(argc);
 	if (!args) {
+		end_call_python(self);
 		return JS_ThrowOutOfMemory(self->context);
 	}
 	for (int i = 0; i < argc; ++i) {
@@ -537,6 +530,7 @@ static JSValue js_c_function(
 	PyObject *result = PyObject_CallObject(node->obj, args);
 	Py_DECREF(args);
 	if (!result) {
+		end_call_python(self);
 		return JS_ThrowInternalError(self->context, "Python call failed.");
 	}
 	JSValue js_result = JS_NULL;
@@ -544,6 +538,8 @@ static JSValue js_c_function(
 		js_result = python_to_quickjs(self, result);
 	}
 	Py_DECREF(result);
+
+	end_call_python(self);
 	return js_result;
 }
 
@@ -563,7 +559,6 @@ static PyObject *context_add_callable(ContextData *self, PyObject *args) {
 		return NULL;
 	}
 	Py_INCREF(callable);
-	self->can_release_gil = 0;
 	node->magic = 0;
 	if (self->python_callables) {
 		node->magic = self->python_callables->magic + 1;
