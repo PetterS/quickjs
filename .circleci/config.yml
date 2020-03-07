@@ -3,31 +3,32 @@ jobs:
   build:
     docker:
       - image: circleci/python:3.6.6
-        environment:
-          PIPENV_VENV_IN_PROJECT: true
 
     working_directory: ~/repo
 
     steps:
       - checkout
 
-      # Download and cache dependencies
+      - run:
+          name: Install poetry
+          command: |
+            sudo -H python3 -m pip install --upgrade pip
+            sudo -H python3 -m pip install --upgrade poetry
+
       - restore_cache:
           keys:
-          - v1-dependencies-{{ checksum "Pipfile.lock" }}
+          - v1-dependencies-{{ checksum "poetry.lock" }}
 
       - run:
-          name: install dependencies
+          name: Install dependencies
           command: |
-            sudo -H pip install --upgrade pip
-            pip install --user pipenv
-            pipenv sync --dev
-            pipenv clean
+            poetry config --local virtualenvs.in-project true
+            poetry install
 
       - save_cache:
           paths:
             - ./.venv
-          key: v1-dependencies-{{ checksum "Pipfile.lock" }}
+          key: v1-dependencies-{{ checksum "poetry.lock" }}
 
       - run:
           name: Tests
