@@ -260,7 +260,17 @@ struct module_state {};
 
 // Creates an instance of the _quickjs.Context class.
 static PyObject *context_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
-	Py_RETURN_NONE;
+	ContextData *self;
+	self = (ContextData *)type->tp_alloc(type, 0);
+	if (self != NULL) {
+		// We never have different contexts for the same runtime. This way, different
+		// _quickjs.Context can be used concurrently.
+		self->runtime = JS_NewRuntime();
+		self->context = JS_NewContext(self->runtime);
+		self->has_time_limit = 0;
+		self->time_limit = 0;
+	}
+	return (PyObject *)self;
 }
 
 // Deallocates an instance of the _quickjs.Context class.
