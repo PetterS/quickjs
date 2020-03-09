@@ -31,4 +31,4 @@ Both `Function` and `Context` expose `set_memory_limit` and `set_time_limit` fun
 For full functionality, please see `test_quickjs.py`.
 
 # Developing
-Use a `pipenv shell` and `make test` should work from inside its virtual environment.
+Use a `poetry shell` and `make test` should work from inside its virtual environment.
