@@ -571,7 +571,7 @@ static PyObject *context_add_callable(ContextData *self, PyObject *args) {
 	    self->context,
 	    js_c_function,
 	    "python",  // TODO: Name of the function should not matter that much?
-	    1,  // TODO: Should we allow setting the .length of the function to something other than 1?
+	    0,  // TODO: Should we allow setting the .length of the function to something other than 0?
 	    JS_CFUNC_generic_magic,
 	    node->magic);
 	JSValue global = JS_GetGlobalObject(self->context);
