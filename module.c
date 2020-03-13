@@ -522,9 +522,18 @@ static JSValue js_c_function(
 		end_call_python(self);
 		return JS_ThrowOutOfMemory(self->context);
 	}
+	int tuple_success = 1;
 	for (int i = 0; i < argc; ++i) {
 		PyObject *arg = quickjs_to_python(self, JS_DupValue(self->context, argv[i]));
+		if (!arg) {
+			tuple_success = 0;
+			break;
+		}
 		PyTuple_SET_ITEM(args, i, arg);
+	}
+	if (!tuple_success) {
+		Py_DECREF(args);
+		return JS_ThrowInternalError(self->context, "Internal error: could not convert args.");
 	}
 
 	PyObject *result = PyObject_CallObject(node->obj, args);

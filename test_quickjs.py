@@ -96,7 +96,7 @@ class Context(unittest.TestCase):
             msg = str(e)
         else:
             self.fail("Expected exception.")
-        
+
         self.assertIn("at funcA (<input>:3)\n", msg)
         self.assertIn("at funcB (<input>:6)\n", msg)
 
@@ -161,7 +161,7 @@ class CallIntoPython(unittest.TestCase):
             self.assertEqual(f(40) - i, 42)
             self.assertEqual(g(2) - i, 42)
             self.assertEqual(self.context.eval("((f, a) => f(a))")(f, 40) - i, 42)
-        
+
     def test_make_function_call_from_js(self):
         f = self.context.add_callable("f", lambda x: x + 2)
         g = self.context.eval("""(
@@ -179,11 +179,10 @@ class CallIntoPython(unittest.TestCase):
         with self.assertRaisesRegex(quickjs.JSException, "Python call failed"):
             self.context.eval("error(0)")
 
-
     def test_make_function_two_args(self):
         def concat(a, b):
             return a + b
-        
+
         self.context.add_callable("concat", concat)
         result = self.context.eval("concat(40, 2)")
         self.assertEqual(result, 42)
@@ -196,7 +195,7 @@ class CallIntoPython(unittest.TestCase):
         """Without the JS_DupValue in js_c_function, this test crashes."""
         def concat(a, b):
             return a + "-" + b
-        
+
         self.context.add_callable("concat", concat)
         concat = self.context.get("concat")
         result = concat("aaa", "bbb")
@@ -210,6 +209,14 @@ class CallIntoPython(unittest.TestCase):
         inner = self.context.eval("(function() { return 42; })")
         self.context.add_callable("f", lambda: inner())
         self.assertEqual(self.context.eval("f()"), 42)
+
+    def test_invalid_argument(self):
+        self.context.add_callable("p", lambda: 42)
+        self.assertEqual(self.context.eval("p()"), 42)
+        with self.assertRaisesRegex(quickjs.JSException, "Python call failed"):
+            self.context.eval("p(1)")
+        with self.assertRaisesRegex(quickjs.JSException, "Python call failed"):
+            self.context.eval("p({})")
 
 
 class Object(unittest.TestCase):
@@ -448,7 +455,8 @@ class JavascriptFeatures(unittest.TestCase):
             self.assertEqual(context.eval('(function(){ return "' + x + '";})()'), x)
 
     def test_es2020_optional_chaining(self):
-        f = quickjs.Function("f", """
+        f = quickjs.Function(
+            "f", """
             function f(x) {
                 return x?.one?.two;
             }
@@ -458,7 +466,8 @@ class JavascriptFeatures(unittest.TestCase):
         self.assertEqual(f({"one": {"two": 42}}), 42)
 
     def test_es2020_null_coalescing(self):
-        f = quickjs.Function("f", """
+        f = quickjs.Function(
+            "f", """
             function f(x) {
                 return x ?? 42;
             }
@@ -517,7 +526,6 @@ class Threads(unittest.TestCase):
         expected = sum(data)
         for future in concurrent.futures.as_completed(futures):
             self.assertEqual(future.result(), expected)
-
 
 
 class QJS(object):
