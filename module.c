@@ -582,7 +582,7 @@ static PyObject *context_add_callable(ContextData *self, PyObject *args) {
 	JSValue function = JS_NewCFunctionMagic(
 	    self->context,
 	    js_c_function,
-	    "python",  // TODO: Name of the function should not matter that much?
+	    name,
 	    0,  // TODO: Should we allow setting the .length of the function to something other than 0?
 	    JS_CFUNC_generic_magic,
 	    node->magic);
