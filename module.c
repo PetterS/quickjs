@@ -507,24 +507,27 @@ static PyObject *context_gc(ContextData *self) {
 
 static JSValue js_c_function(
     JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic) {
-	ContextData *self = (ContextData *)JS_GetContextOpaque(ctx);
-	PythonCallableNode *node = self->python_callables;
+	ContextData *context = (ContextData *)JS_GetContextOpaque(ctx);
+	if (context->has_time_limit) {
+		return JS_ThrowInternalError(ctx, "Can not call into Python with a time limit set.");
+	}
+	PythonCallableNode *node = context->python_callables;
 	while (node && node->magic != magic) {
 		node = node->next;
 	}
 	if (!node) {
-		return JS_ThrowInternalError(self->context, "Internal error.");
+		return JS_ThrowInternalError(ctx, "Internal error.");
 	}
-	prepare_call_python(self);
+	prepare_call_python(context);
 
 	PyObject *args = PyTuple_New(argc);
 	if (!args) {
-		end_call_python(self);
-		return JS_ThrowOutOfMemory(self->context);
+		end_call_python(context);
+		return JS_ThrowOutOfMemory(ctx);
 	}
 	int tuple_success = 1;
 	for (int i = 0; i < argc; ++i) {
-		PyObject *arg = quickjs_to_python(self, JS_DupValue(self->context, argv[i]));
+		PyObject *arg = quickjs_to_python(context, JS_DupValue(ctx, argv[i]));
 		if (!arg) {
 			tuple_success = 0;
 			break;
@@ -533,22 +536,22 @@ static JSValue js_c_function(
 	}
 	if (!tuple_success) {
 		Py_DECREF(args);
-		return JS_ThrowInternalError(self->context, "Internal error: could not convert args.");
+		return JS_ThrowInternalError(ctx, "Internal error: could not convert args.");
 	}
 
 	PyObject *result = PyObject_CallObject(node->obj, args);
 	Py_DECREF(args);
 	if (!result) {
-		end_call_python(self);
-		return JS_ThrowInternalError(self->context, "Python call failed.");
+		end_call_python(context);
+		return JS_ThrowInternalError(ctx, "Python call failed.");
 	}
 	JSValue js_result = JS_NULL;
-	if (python_to_quickjs_possible(self, result)) {
-		js_result = python_to_quickjs(self, result);
+	if (python_to_quickjs_possible(context, result)) {
+		js_result = python_to_quickjs(context, result);
 	}
 	Py_DECREF(result);
 
-	end_call_python(self);
+	end_call_python(context);
 	return js_result;
 }
 

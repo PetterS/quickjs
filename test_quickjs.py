@@ -218,6 +218,11 @@ class CallIntoPython(unittest.TestCase):
         with self.assertRaisesRegex(quickjs.JSException, "Python call failed"):
             self.context.eval("p({})")
 
+    def test_time_limit_disallowed(self):
+        self.context.add_callable("f", lambda x: x + 2)
+        self.context.set_time_limit(1000)
+        with self.assertRaises(quickjs.JSException):
+            self.context.eval("f(40)")
 
 class Object(unittest.TestCase):
     def setUp(self):
