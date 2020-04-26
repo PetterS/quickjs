@@ -446,7 +446,7 @@ static PyObject *context_set_max_stack_size(ContextData *self, PyObject *args) {
 	if (!PyArg_ParseTuple(args, "n", &limit)) {
 		return NULL;
 	}
-	JS_SetMaxStackSize(self->context, limit);
+	JS_SetMaxStackSize(self->runtime, limit);
 	Py_RETURN_NONE;
 }
 
