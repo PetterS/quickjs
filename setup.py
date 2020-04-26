@@ -39,6 +39,7 @@ _quickjs = Extension(
     # HACK.
     # See https://github.com/pypa/packaging-problems/issues/84.
     sources=get_c_sources(include_headers=("sdist" in sys.argv)),
+    extra_compile_args=["-Werror=incompatible-pointer-types"],
     extra_link_args=extra_link_args)
 
 long_description = """
