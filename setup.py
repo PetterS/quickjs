@@ -4,7 +4,7 @@ from typing import List
 
 from setuptools import setup, Extension
 
-CONFIG_VERSION = '2020-03-16'
+CONFIG_VERSION = '2020-04-12'
 extra_link_args: List[str] = []
 
 if sys.platform == "win32":
@@ -39,6 +39,7 @@ _quickjs = Extension(
     # HACK.
     # See https://github.com/pypa/packaging-problems/issues/84.
     sources=get_c_sources(include_headers=("sdist" in sys.argv)),
+    extra_compile_args=["-Werror=incompatible-pointer-types"],
     extra_link_args=extra_link_args)
 
 long_description = """
@@ -55,7 +56,7 @@ setup(author="Petter Strandmark",
       author_email="petter.strandmark@gmail.com",
       name='quickjs',
       url='https://github.com/PetterS/quickjs',
-      version='1.11.0',
+      version='1.12.0',
       description='Wrapping the quickjs C library.',
       long_description=long_description,
       packages=["quickjs"],
