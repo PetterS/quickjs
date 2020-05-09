@@ -272,6 +272,7 @@ class CallIntoPython(unittest.TestCase):
         with self.assertRaises(quickjs.JSException):
             self.context.eval("f(40)")
 
+
 class Object(unittest.TestCase):
     def setUp(self):
         self.context = quickjs.Context()
