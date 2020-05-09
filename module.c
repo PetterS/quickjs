@@ -46,14 +46,20 @@ static PyObject *StackOverflow = NULL;
 //
 // Takes ownership of the JSValue and will deallocate it (refcount reduced by 1).
 static PyObject *quickjs_to_python(ContextData *context_obj, JSValue value);
+// This method is always called in a context before running JS code in QuickJS. It sets up time
+// limites, releases the GIL etc.
+static void prepare_call_js(ContextData *context);
+// This method is called right after returning from running JS code. Aquires the GIL etc.
+static void end_call_js(ContextData *context);
 
 static JSModuleDef *js_module_loader(JSContext *ctx,
                               const char *module_name, void *opaque) {
     ContextData* context = (ContextData*) opaque;
 	JSModuleDef* module = NULL;
+
+	end_call_js(context);
 	if (context->module_loader == NULL || !PyCallable_Check(context->module_loader)) {
 		JS_ThrowReferenceError(ctx, "Could not load module \"%s\": no loader.", module_name);
-		return NULL;
 	} else {
 		PyObject* result = PyObject_CallFunction(context->module_loader, "s", module_name);
 
@@ -72,6 +78,7 @@ static JSModuleDef *js_module_loader(JSContext *ctx,
 
 		Py_XDECREF(result);
 	}
+	prepare_call_js(context);
     return module;
 }
 

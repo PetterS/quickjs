@@ -70,6 +70,11 @@ class Context(unittest.TestCase):
         with self.assertRaises(TypeError):
             self.context.set_module_loader(2)
 
+    def test_import_module_loader_failed(self):
+        self.context.set_module_loader(lambda: "")
+        with self.assertRaisesRegex(quickjs.JSException, "loader failed"):
+            self.context.module('import { foo } from "petter";')
+
     def test_module_does_not_return_code(self):
         self.context.set_module_loader(lambda name: 1)
         with self.assertRaisesRegex(quickjs.JSException, "did not return a string"):
