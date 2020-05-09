@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "quickjs"
+version = "0"  # Version in setup.py is used for distributing.
+description = "Python wrapper around https://bellard.org/quickjs/"
+authors = ["Petter Strandmark"]
+
+[tool.poetry.dependencies]
+python = ">=3.6"
+
+[tool.poetry.dev-dependencies]
+yapf = "*"
+setuptools = "*"
+wheel = "*"
+twine = "*"
+
+[build-system]
+requires = ["poetry>=1.0.5"]

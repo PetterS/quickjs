@@ -1,7 +1,7 @@
 import concurrent.futures
 import json
 import threading
-from typing import Tuple
+from typing import Tuple, Callable
 
 import _quickjs
 
@@ -60,6 +60,10 @@ class Function:
     def memory(self):
         with self._lock:
             return self._context.memory()
+
+    def add_callable(self, global_name: str, callable: Callable) -> None:
+        with self._lock:
+            self._context.add_callable(global_name, callable)
 
     def gc(self):
         """Manually run the garbage collection.

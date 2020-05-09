@@ -139,7 +139,7 @@ class Context(unittest.TestCase):
             msg = str(e)
         else:
             self.fail("Expected exception.")
-        
+
         self.assertIn("at funcA (<input>:3)\n", msg)
         self.assertIn("at funcB (<input>:6)\n", msg)
 
@@ -186,6 +186,86 @@ class Context(unittest.TestCase):
         with self.assertRaisesRegex(quickjs.JSException, "unexpected token"):
             self.context.parse_json("a b c")
 
+
+class CallIntoPython(unittest.TestCase):
+    def setUp(self):
+        self.context = quickjs.Context()
+
+    def test_make_function(self):
+        self.context.add_callable("f", lambda x: x + 2)
+        self.assertEqual(self.context.eval("f(40)"), 42)
+
+    def test_make_two_functions(self):
+        for i in range(10):
+            self.context.add_callable("f", lambda x: i + x + 2)
+            self.context.add_callable("g", lambda x: i + x + 40)
+            f = self.context.get("f")
+            g = self.context.get("g")
+            self.assertEqual(f(40) - i, 42)
+            self.assertEqual(g(2) - i, 42)
+            self.assertEqual(self.context.eval("((f, a) => f(a))")(f, 40) - i, 42)
+
+    def test_make_function_call_from_js(self):
+        f = self.context.add_callable("f", lambda x: x + 2)
+        g = self.context.eval("""(
+            function() {
+                return f(20) + 20;
+            }
+        )""")
+        self.assertEqual(g(), 42)
+
+    def test_python_function_raises(self):
+        def error(a):
+            raise ValueError("A")
+
+        self.context.add_callable("error", error)
+        with self.assertRaisesRegex(quickjs.JSException, "Python call failed"):
+            self.context.eval("error(0)")
+
+    def test_make_function_two_args(self):
+        def concat(a, b):
+            return a + b
+
+        self.context.add_callable("concat", concat)
+        result = self.context.eval("concat(40, 2)")
+        self.assertEqual(result, 42)
+
+        concat = self.context.get("concat")
+        result = self.context.eval("((f, a, b) => 22 + f(a, b))")(concat, 10, 10)
+        self.assertEqual(result, 42)
+
+    def test_make_function_two_string_args(self):
+        """Without the JS_DupValue in js_c_function, this test crashes."""
+        def concat(a, b):
+            return a + "-" + b
+
+        self.context.add_callable("concat", concat)
+        concat = self.context.get("concat")
+        result = concat("aaa", "bbb")
+        self.assertEqual(result, "aaa-bbb")
+
+    def test_can_eval_in_same_context(self):
+        self.context.add_callable("f", lambda: 40 + self.context.eval("1 + 1"))
+        self.assertEqual(self.context.eval("f()"), 42)
+
+    def test_can_call_in_same_context(self):
+        inner = self.context.eval("(function() { return 42; })")
+        self.context.add_callable("f", lambda: inner())
+        self.assertEqual(self.context.eval("f()"), 42)
+
+    def test_invalid_argument(self):
+        self.context.add_callable("p", lambda: 42)
+        self.assertEqual(self.context.eval("p()"), 42)
+        with self.assertRaisesRegex(quickjs.JSException, "Python call failed"):
+            self.context.eval("p(1)")
+        with self.assertRaisesRegex(quickjs.JSException, "Python call failed"):
+            self.context.eval("p({})")
+
+    def test_time_limit_disallowed(self):
+        self.context.add_callable("f", lambda x: x + 2)
+        self.context.set_time_limit(1000)
+        with self.assertRaises(quickjs.JSException):
+            self.context.eval("f(40)")
 
 class Object(unittest.TestCase):
     def setUp(self):
@@ -406,6 +486,17 @@ class FunctionTest(unittest.TestCase):
         f.set_max_stack_size(2000 * limit)
         self.assertEqual(f(limit), limit)
 
+    def test_add_callable(self):
+        f = quickjs.Function(
+            "f", """
+            function f() {
+                return pfunc();
+            }
+        """)
+        f.add_callable("pfunc", lambda: 42)
+
+        self.assertEqual(f(), 42)
+
 
 class JavascriptFeatures(unittest.TestCase):
     def test_unicode_strings(self):
@@ -421,7 +512,8 @@ class JavascriptFeatures(unittest.TestCase):
             self.assertEqual(context.eval('(function(){ return "' + x + '";})()'), x)
 
     def test_es2020_optional_chaining(self):
-        f = quickjs.Function("f", """
+        f = quickjs.Function(
+            "f", """
             function f(x) {
                 return x?.one?.two;
             }
@@ -431,7 +523,8 @@ class JavascriptFeatures(unittest.TestCase):
         self.assertEqual(f({"one": {"two": 42}}), 42)
 
     def test_es2020_null_coalescing(self):
-        f = quickjs.Function("f", """
+        f = quickjs.Function(
+            "f", """
             function f(x) {
                 return x ?? 42;
             }
@@ -490,7 +583,6 @@ class Threads(unittest.TestCase):
         expected = sum(data)
         for future in concurrent.futures.as_completed(futures):
             self.assertEqual(future.result(), expected)
-
 
 
 class QJS(object):
