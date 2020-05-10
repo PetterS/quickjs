@@ -1,11 +1,12 @@
 import glob
 import sys
-from typing import List
+from typing import List, Tuple
 
 from setuptools import setup, Extension
 
 CONFIG_VERSION = '2020-04-12'
 extra_link_args: List[str] = []
+define_macros: List[Tuple[str, str]] = []
 
 if sys.platform == "win32":
     # To build for Windows:
@@ -18,12 +19,19 @@ if sys.platform == "win32":
     import distutils.cygwinccompiler
     distutils.cygwinccompiler.get_msvcr = lambda: []
     # Escaping works differently.
-    CONFIG_VERSION = f'\\"{CONFIG_VERSION}\\"'
+    define_macros.append(("CONFIG_VERSION", f'\\"{CONFIG_VERSION}\\"'))
     # Make sure that pthreads is linked statically, otherwise we run into problems
     # on computers where it is not installed.
     extra_link_args = ["-static"]
 else:
-    CONFIG_VERSION = f'"{CONFIG_VERSION}"'
+    define_macros.append(("CONFIG_VERSION", f'"{CONFIG_VERSION}"'))
+
+try:
+    import __pypy__
+    # We are running pypy and need to disable stack depth computation.
+    define_macros.append(("EMSCRIPTEN", "1"))
+except ImportError:
+    pass
 
 
 def get_c_sources(include_headers=False):
@@ -35,7 +43,7 @@ def get_c_sources(include_headers=False):
 
 _quickjs = Extension(
     '_quickjs',
-    define_macros=[('CONFIG_VERSION', CONFIG_VERSION)],
+    define_macros=define_macros,
     # HACK.
     # See https://github.com/pypa/packaging-problems/issues/84.
     sources=get_c_sources(include_headers=("sdist" in sys.argv)),
