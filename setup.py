@@ -29,6 +29,8 @@ else:
 try:
     import __pypy__
     # We are running pypy and need to disable stack depth computation.
+    # This macro happens to do this, as well as a few other things that does not 
+    # seem to affect our test suite.
     define_macros.append(("EMSCRIPTEN", "1"))
 except ImportError:
     pass
