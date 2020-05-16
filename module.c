@@ -24,6 +24,7 @@ typedef struct {
 	JSContext *context;
 	int has_time_limit;
 	clock_t time_limit;
+	PyObject *module_loader;
 	// Used when releasing the GIL.
 	PyThreadState *thread_state;
 	InterruptData interrupt_data;
@@ -45,6 +46,46 @@ static PyObject *StackOverflow = NULL;
 //
 // Takes ownership of the JSValue and will deallocate it (refcount reduced by 1).
 static PyObject *quickjs_to_python(ContextData *context_obj, JSValue value);
+// This method is always called in a context before running JS code in QuickJS. It sets up time
+// limites, releases the GIL etc.
+static void prepare_call_js(ContextData *context);
+// This method is called right after returning from running JS code. Aquires the GIL etc.
+static void end_call_js(ContextData *context);
+
+static JSModuleDef *js_module_loader(JSContext *ctx, const char *module_name, void *opaque) {
+	ContextData *context = (ContextData *)opaque;
+	JSModuleDef *module = NULL;
+
+	end_call_js(context);
+	if (context->module_loader == NULL || !PyCallable_Check(context->module_loader)) {
+		JS_ThrowReferenceError(ctx, "Could not load module \"%s\": no loader.", module_name);
+	} else {
+		PyObject *result = PyObject_CallFunction(context->module_loader, "s", module_name);
+
+		if (result == NULL) {
+			JS_ThrowReferenceError(
+			    ctx, "Could not load module \"%s\": loader failed.", module_name);
+		} else if (!PyUnicode_Check(result)) {
+			JS_ThrowReferenceError(
+			    ctx, "Could not load module \"%s\": loader did not return a string.", module_name);
+		} else {
+			const char *code = PyUnicode_AsUTF8(result);
+			JSValue js_value = JS_Eval(ctx,
+			                           code,
+			                           strlen(code),
+			                           module_name,
+			                           JS_EVAL_TYPE_MODULE | JS_EVAL_FLAG_COMPILE_ONLY);
+			if (!JS_IsException(js_value)) {
+				module = JS_VALUE_GET_PTR(js_value);
+				JS_FreeValue(ctx, js_value);
+			}
+		}
+
+		Py_XDECREF(result);
+	}
+	prepare_call_js(context);
+	return module;
+}
 
 // Returns nonzero if we should stop due to a time limit.
 static int js_interrupt_handler(JSRuntime *rt, void *opaque) {
@@ -135,9 +176,41 @@ static PyObject *object_json(ObjectData *self) {
 	return quickjs_to_python(self->context, json_string);
 }
 
+// _quickjs.Object.get
+//
+// Retrieves a property from the JS object.
+static PyObject *object_get(ObjectData *self, PyObject *args) {
+	const char *name;
+	if (!PyArg_ParseTuple(args, "s", &name)) {
+		return NULL;
+	}
+	JSValue value = JS_GetPropertyStr(self->context->context, self->object, name);
+	return quickjs_to_python(self->context, value);
+}
+
+// _quickjs.Object.dir
+//
+// Returns a list of all properties of a JS object.
+static PyObject *object_dir(ObjectData *self) {
+	JSPropertyEnum *props = 0;
+	uint32_t len;
+	JS_GetOwnPropertyNames(self->context->context, &props, &len, self->object, JS_GPN_STRING_MASK);
+
+	PyObject *list = PyList_New(len);
+	for (int i = 0; i < len; ++i) {
+		const char *prop = JS_AtomToCString(self->context->context, props[i].atom);
+		PyList_SetItem(list, i, Py_BuildValue("s", prop));
+		JS_FreeCString(self->context->context, prop);
+	}
+	js_free(self->context->context, props);
+	return list;
+}
+
 // All methods of the _quickjs.Object class.
 static PyMethodDef object_methods[] = {
     {"json", (PyCFunction)object_json, METH_NOARGS, "Converts to a JSON string."},
+    {"get", (PyCFunction)object_get, METH_VARARGS, "Retrieves a property."},
+    {"dir", (PyCFunction)object_dir, METH_NOARGS, "Returns a list of all properties."},
     {NULL} /* Sentinel */
 };
 
@@ -319,8 +392,7 @@ struct module_state {};
 
 // Creates an instance of the _quickjs.Context class.
 static PyObject *context_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
-	ContextData *self;
-	self = (ContextData *)type->tp_alloc(type, 0);
+	ContextData *self = (ContextData *)type->tp_alloc(type, 0);
 	if (self != NULL) {
 		// We never have different contexts for the same runtime. This way, different
 		// _quickjs.Context can be used concurrently.
@@ -328,6 +400,10 @@ static PyObject *context_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 		self->context = JS_NewContext(self->runtime);
 		self->has_time_limit = 0;
 		self->time_limit = 0;
+
+		self->module_loader = NULL;
+		JS_SetModuleLoaderFunc(self->runtime, NULL, js_module_loader, self);
+
 		self->thread_state = NULL;
 		self->python_callables = NULL;
 		JS_SetContextOpaque(self->context, self);
@@ -339,6 +415,7 @@ static PyObject *context_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 static void context_dealloc(ContextData *self) {
 	JS_FreeContext(self->context);
 	JS_FreeRuntime(self->runtime);
+	Py_XDECREF(self->module_loader);
 	Py_TYPE(self)->tp_free((PyObject *)self);
 	PythonCallableNode *node = self->python_callables;
 	self->python_callables = NULL;
@@ -447,6 +524,24 @@ static PyObject *context_set_max_stack_size(ContextData *self, PyObject *args) {
 		return NULL;
 	}
 	JS_SetMaxStackSize(self->runtime, limit);
+	Py_RETURN_NONE;
+}
+
+// _quickjs.Context.set_module_loade
+//
+// Sets the max stack size in bytes.
+static PyObject *context_set_module_loader(ContextData *self, PyObject *args) {
+	PyObject *loader;
+	if (!PyArg_ParseTuple(args, "O", &loader)) {
+		return NULL;
+	}
+	if (!PyCallable_Check(loader)) {
+		PyErr_SetString(PyExc_TypeError, "Module loader must be callable.");
+		return NULL;
+	}
+	Py_XDECREF(self->module_loader);
+	self->module_loader = loader;
+	Py_INCREF(self->module_loader);
 	Py_RETURN_NONE;
 }
 
@@ -619,6 +714,10 @@ static PyMethodDef context_methods[] = {
      (PyCFunction)context_set_max_stack_size,
      METH_VARARGS,
      "Sets the maximum stack size in bytes. Default is 256kB."},
+    {"set_module_loader",
+     (PyCFunction)context_set_module_loader,
+     METH_VARARGS,
+     "Sets the Python function that takes a module name and returns its source code."},
     {"memory", (PyCFunction)context_memory, METH_NOARGS, "Returns the memory usage as a dict."},
     {"gc", (PyCFunction)context_gc, METH_NOARGS, "Runs garbage collection."},
     {"add_callable", (PyCFunction)context_add_callable, METH_VARARGS, "Wraps a Python callable."},

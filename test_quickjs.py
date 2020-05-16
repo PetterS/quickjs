@@ -55,12 +55,60 @@ class Context(unittest.TestCase):
         self.assertEqual(self.context.get("y"), "foo")
         self.assertEqual(self.context.get("z"), None)
 
-    def test_module(self):
+    def test_run_module(self):
         self.context.module("""   
             export function test() {
                 return 42;
             }
         """)
+
+    def test_import_module_without_loader(self):
+        with self.assertRaisesRegex(quickjs.JSException, "no loader"):
+            self.context.module('import { foo } from "petter";')
+
+    def test_set_module_loader_to_non_callable(self):
+        with self.assertRaises(TypeError):
+            self.context.set_module_loader(2)
+
+    def test_import_module_loader_failed(self):
+        self.context.set_module_loader(lambda: "")
+        with self.assertRaisesRegex(quickjs.JSException, "loader failed"):
+            self.context.module('import { foo } from "petter";')
+
+    def test_module_does_not_return_code(self):
+        self.context.set_module_loader(lambda name: 1)
+        with self.assertRaisesRegex(quickjs.JSException, "did not return a string"):
+            self.context.module('import { foo } from "petter";')
+
+    def _module_loader(self, name):
+        """Helper method that for module loading."""
+
+        if name == "mymodule":
+            return """
+                export function foo() {
+                    return 42;
+                }
+            """
+        else:
+            raise ValueError("Unknown module.")
+
+    def test_import_unknown_module(self):
+        self.context.set_module_loader(self._module_loader)
+        with self.assertRaisesRegex(quickjs.JSException, "loader failed"):
+            self.context.module('import { foo } from "somewhere_else";')
+
+    def test_import_module(self):
+        self.context.set_module_loader(self._module_loader)
+        self.context.module("""
+            import { foo } from "mymodule";
+
+            function test() {
+                return foo();
+            }
+
+            globalThis.test = test;
+        """)
+        self.assertEqual(self.context.get("test")(), 42)
 
     def test_error(self):
         with self.assertRaisesRegex(quickjs.JSException, "ReferenceError: missing is not defined"):
@@ -224,6 +272,7 @@ class CallIntoPython(unittest.TestCase):
         with self.assertRaises(quickjs.JSException):
             self.context.eval("f(40)")
 
+
 class Object(unittest.TestCase):
     def setUp(self):
         self.context = quickjs.Context()
@@ -317,6 +366,15 @@ class Object(unittest.TestCase):
         d = context2.eval("({a: 1})")
         with self.assertRaisesRegex(ValueError, "Can not mix JS objects from different contexts."):
             f(d)
+
+    def test_dir(self):
+        d = self.context.eval("({a: 1, b: 2})")
+        self.assertEqual(d.dir(), ["a", "b"])
+
+    def test_get(self):
+        d = self.context.eval("({a: 1, b: 2})")
+        self.assertEqual(d.get("a"), 1)
+        self.assertEqual(d.get("b"), 2)
 
 
 class FunctionTest(unittest.TestCase):
