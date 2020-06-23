@@ -548,6 +548,9 @@ static JSValue js_c_function(
 	JSValue js_result = JS_NULL;
 	if (python_to_quickjs_possible(context, result)) {
 		js_result = python_to_quickjs(context, result);
+	} else {
+		PyErr_Clear();
+		js_result = JS_ThrowInternalError(ctx, "Can not convert Python result to JS.");
 	}
 	Py_DECREF(result);
 

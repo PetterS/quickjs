@@ -56,7 +56,7 @@ class Context(unittest.TestCase):
         self.assertEqual(self.context.get("z"), None)
 
     def test_module(self):
-        self.context.module("""   
+        self.context.module("""
             export function test() {
                 return 42;
             }
@@ -163,7 +163,7 @@ class CallIntoPython(unittest.TestCase):
             self.assertEqual(self.context.eval("((f, a) => f(a))")(f, 40) - i, 42)
 
     def test_make_function_call_from_js(self):
-        f = self.context.add_callable("f", lambda x: x + 2)
+        self.context.add_callable("f", lambda x: x + 2)
         g = self.context.eval("""(
             function() {
                 return f(20) + 20;
@@ -223,6 +223,19 @@ class CallIntoPython(unittest.TestCase):
         self.context.set_time_limit(1000)
         with self.assertRaises(quickjs.JSException):
             self.context.eval("f(40)")
+
+    def test_conversion_failure_does_not_raise_system_error(self):
+        # https://github.com/PetterS/quickjs/issues/38
+
+        def test_list():
+            return [1, 2, 3]
+
+        self.context.add_callable("test_list", test_list)
+        with self.assertRaises(quickjs.JSException):
+            # With incorrect error handling, this (safely) made Python raise a SystemError
+            # instead of a JS exception.
+            self.context.eval("test_list()")
+
 
 class Object(unittest.TestCase):
     def setUp(self):
