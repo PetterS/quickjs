@@ -4,6 +4,12 @@ import unittest
 
 import quickjs
 
+try:
+    import __pypy__
+    running_pypy = True
+except ImportError:
+    running_pypy = False
+
 
 class LoadModule(unittest.TestCase):
     def test_42(self):
@@ -224,6 +230,7 @@ class CallIntoPython(unittest.TestCase):
         with self.assertRaises(quickjs.JSException):
             self.context.eval("f(40)")
 
+
 class Object(unittest.TestCase):
     def setUp(self):
         self.context = quickjs.Context()
@@ -415,6 +422,7 @@ class FunctionTest(unittest.TestCase):
         f.gc()
         self.assertLessEqual(f.memory()["obj_count"], initial_count)
 
+    @unittest.skipIf(running_pypy, "Stack depth detection disabled in pypy.")
     def test_deep_recursion(self):
         f = quickjs.Function(
             "f", """
@@ -540,6 +548,7 @@ class QJS(object):
 
 
 class QuickJSContextInClass(unittest.TestCase):
+    @unittest.skipIf(running_pypy, "Works in pypy but not supported.")
     @unittest.expectedFailure
     def test_github_issue_7(self):
         # This gives stack overflow internal error, due to how QuickJS calculates stack frames.
