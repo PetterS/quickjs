@@ -536,6 +536,7 @@ static JSValue js_c_function(
 	}
 	if (!tuple_success) {
 		Py_DECREF(args);
+		end_call_python(context);
 		return JS_ThrowInternalError(ctx, "Internal error: could not convert args.");
 	}
 
