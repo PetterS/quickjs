@@ -63,7 +63,7 @@ class Context(unittest.TestCase):
         """)
 
     def test_error(self):
-        with self.assertRaisesRegex(quickjs.JSException, "ReferenceError: missing is not defined"):
+        with self.assertRaisesRegex(quickjs.JSException, "ReferenceError: 'missing' is not defined"):
             self.context.eval("missing + missing")
 
     def test_lifetime(self):
