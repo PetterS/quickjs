@@ -74,12 +74,14 @@ class Function:
             self._context.gc()
 
     def _compile(self, name: str, code: str) -> Tuple[Context, Object]:
+        self.thread_id = threading.get_ident()
         context = Context()
         context.eval(code)
         f = context.get(name)
         return context, f
 
     def _call(self, *args, run_gc=True):
+        assert self.thread_id == threading.get_ident()
         def convert_arg(arg):
             if isinstance(arg, (type(None), str, bool, float, int)):
                 return arg
