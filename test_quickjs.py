@@ -428,6 +428,9 @@ class FunctionTest(unittest.TestCase):
         f.gc()
         self.assertLessEqual(f.memory()["obj_count"], initial_count)
 
+    # Currently disabled because stack checks are disabled. This was stack overflow errors were
+    # seen in CI when upgrading to Python 3.8.
+    @unittest.skip
     def test_deep_recursion(self):
         f = quickjs.Function(
             "f", """
@@ -553,7 +556,9 @@ class QJS(object):
 
 
 class QuickJSContextInClass(unittest.TestCase):
-    @unittest.expectedFailure
+    # Not an expected failure when stack checks are disabled.
+    # @unittest.expectedFailure
+    @unittest.skip
     def test_github_issue_7(self):
         # This gives stack overflow internal error, due to how QuickJS calculates stack frames.
         qjs = QJS()

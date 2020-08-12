@@ -35,7 +35,7 @@ def get_c_sources(include_headers=False):
 
 _quickjs = Extension(
     '_quickjs',
-    define_macros=[('CONFIG_VERSION', CONFIG_VERSION)],
+    define_macros=[('CONFIG_VERSION', CONFIG_VERSION), ("DISABLE_STACK_CHECK", "1")],
     # HACK.
     # See https://github.com/pypa/packaging-problems/issues/84.
     sources=get_c_sources(include_headers=("sdist" in sys.argv)),
