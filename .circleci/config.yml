@@ -2,7 +2,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: circleci/python:3.6.6
+      - image: circleci/python:3.8.2
 
     working_directory: ~/repo
 
@@ -17,7 +17,7 @@ jobs:
 
       - restore_cache:
           keys:
-          - v2-dependencies-{{ checksum "poetry.lock" }}
+          - v3-3.8.2-dependencies-{{ checksum "poetry.lock" }}
 
       - run:
           name: Install dependencies
