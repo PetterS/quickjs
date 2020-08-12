@@ -33139,6 +33139,8 @@ static JSValue JS_EvalObject(JSContext *ctx, JSValueConst this_obj,
 JSValue JS_Eval(JSContext *ctx, const char *input, size_t input_len,
                 const char *filename, int eval_flags)
 {
+    ctx->rt->stack_top = js_get_stack_pointer();
+
     int eval_type = eval_flags & JS_EVAL_TYPE_MASK;
     JSValue ret;
 
