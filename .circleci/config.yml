@@ -32,10 +32,6 @@ jobs:
           key: v3-3.8.2-dependencies-{{ checksum "poetry.lock" }}
 
       - run:
-          name: test_bool
-          command: poetry run python -m unittest test_quickjs.FunctionTest.test_bool
-      
-      - run:
           name: Tests
           command: |
             make test
