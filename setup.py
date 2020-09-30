@@ -4,7 +4,7 @@ from typing import List
 
 from setuptools import setup, Extension
 
-CONFIG_VERSION = '2020-07-05'
+CONFIG_VERSION = '2020-09-06'
 extra_link_args: List[str] = []
 
 if sys.platform == "win32":
@@ -56,7 +56,7 @@ setup(author="Petter Strandmark",
       author_email="petter.strandmark@gmail.com",
       name='quickjs',
       url='https://github.com/PetterS/quickjs',
-      version='1.13.0',
+      version='1.14.0',
       description='Wrapping the quickjs C library.',
       long_description=long_description,
       packages=["quickjs"],
