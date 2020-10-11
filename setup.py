@@ -35,7 +35,20 @@ def get_c_sources(include_headers=False):
 
 
 macros = [("CONFIG_VERSION", CONFIG_VERSION)]
+
+# In Circle CI and Python 3.8, we never got the special stack checks that QuickJS
+# does to work. It returns negative number, which raises a stack overflow exception.
+# 
+# This macro disables the check in CI, but we leave in in regular Python 3.8 builds
+# because it seem to work in practice. If stack overflow exceptions should be
+# encountered, this macro can be unconditionally enabled (manually making sure that
+# the JS code does not actually overflow).
 if os.environ.get("CIRCLECI") == "true":
+    # The built-in is used in the following way in the code:
+    #
+    #    return __builtin_frame_address(0);
+    #
+    # so this macro ensures that the return statement ends up returning 0.
     macros.append(("__builtin_frame_address", "0*"))
 
 _quickjs = Extension(
