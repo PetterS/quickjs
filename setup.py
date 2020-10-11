@@ -1,4 +1,5 @@
 import glob
+import os
 import sys
 from typing import List
 
@@ -33,9 +34,13 @@ def get_c_sources(include_headers=False):
     return sources
 
 
+macros = [("CONFIG_VERSION", CONFIG_VERSION)]
+if os.environ.get("CIRCLECI") == "true":
+    macros.append(("__builtin_frame_address", "0*"))
+
 _quickjs = Extension(
     '_quickjs',
-    define_macros=[('CONFIG_VERSION', CONFIG_VERSION)],
+    define_macros=macros,
     # HACK.
     # See https://github.com/pypa/packaging-problems/issues/84.
     sources=get_c_sources(include_headers=("sdist" in sys.argv)),
@@ -56,7 +61,7 @@ setup(author="Petter Strandmark",
       author_email="petter.strandmark@gmail.com",
       name='quickjs',
       url='https://github.com/PetterS/quickjs',
-      version='1.14.0',
+      version='1.15.0',
       description='Wrapping the quickjs C library.',
       long_description=long_description,
       packages=["quickjs"],

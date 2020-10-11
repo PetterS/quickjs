@@ -2,7 +2,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: circleci/python:3.6.6
+      - image: circleci/python:3.8
 
     working_directory: ~/repo
 
@@ -17,7 +17,7 @@ jobs:
 
       - restore_cache:
           keys:
-          - v2-dependencies-{{ checksum "poetry.lock" }}
+          - v3-dependencies-{{ checksum "poetry.lock" }}
 
       - run:
           name: Install dependencies
@@ -29,7 +29,7 @@ jobs:
           paths:
             - ./.venv
             - ~/.cache/pypoetry
-          key: v2-dependencies-{{ checksum "poetry.lock" }}
+          key: v3-dependencies-{{ checksum "poetry.lock" }}
 
       - run:
           name: Tests

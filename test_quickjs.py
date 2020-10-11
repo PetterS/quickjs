@@ -1,9 +1,12 @@
 import concurrent.futures
 import json
+import os
 import unittest
 
 import quickjs
 
+in_circle_ci = os.environ.get("CIRCLECI") == "true"
+skip_in_circle_ci = unittest.skipIf(in_circle_ci, "Stack checks disabled in CI")
 
 class LoadModule(unittest.TestCase):
     def test_42(self):
@@ -428,6 +431,7 @@ class FunctionTest(unittest.TestCase):
         f.gc()
         self.assertLessEqual(f.memory()["obj_count"], initial_count)
 
+    @skip_in_circle_ci
     def test_deep_recursion(self):
         f = quickjs.Function(
             "f", """
@@ -552,6 +556,7 @@ class QJS(object):
         self.interp.eval('var foo = "bar";')
 
 
+@skip_in_circle_ci
 class QuickJSContextInClass(unittest.TestCase):
     @unittest.expectedFailure
     def test_github_issue_7(self):
