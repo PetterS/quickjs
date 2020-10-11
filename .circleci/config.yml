@@ -19,7 +19,7 @@ jobs:
 
       - restore_cache:
           keys:
-          - v2-dependencies-{{ checksum "poetry.lock" }}
+          - v1-3.8-dependencies-{{ checksum "poetry.lock" }}
 
       - run:
           name: Install dependencies
@@ -31,7 +31,7 @@ jobs:
           paths:
             - ./.venv
             - ~/.cache/pypoetry
-          key: v2-dependencies-{{ checksum "poetry.lock" }}
+          key: v1-3.8-dependencies-{{ checksum "poetry.lock" }}
 
       - run:
           name: Tests
