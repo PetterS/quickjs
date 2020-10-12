@@ -9,14 +9,6 @@ jobs:
     steps:
       - checkout
 
-      - run:
-          name: Install poetry
-          command: |
-            sudo apt update
-            sudo apt install python3-pip
-            sudo -H python3 -m pip install --upgrade pip
-            sudo -H python3 -m pip install --upgrade poetry
-
       - restore_cache:
           keys:
           - v1-3.8-dependencies-{{ checksum "poetry.lock" }}
