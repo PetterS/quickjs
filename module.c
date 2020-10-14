@@ -339,7 +339,6 @@ static PyObject *context_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 static void context_dealloc(ContextData *self) {
 	JS_FreeContext(self->context);
 	JS_FreeRuntime(self->runtime);
-	Py_TYPE(self)->tp_free((PyObject *)self);
 	PythonCallableNode *node = self->python_callables;
 	self->python_callables = NULL;
 	while (node) {
@@ -348,6 +347,7 @@ static void context_dealloc(ContextData *self) {
 		Py_DECREF(this->obj);
 		PyMem_Free(this);
 	}
+	Py_TYPE(self)->tp_free((PyObject *)self);
 }
 
 // Evaluates a Python string as JS and returns the result as a Python object. Will return
