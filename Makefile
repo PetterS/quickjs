@@ -1,6 +1,6 @@
 
 test: install
-	poetry run python -m unittest
+	poetry run python -X dev -m unittest
 
 install: build
 	poetry run python setup.py develop
