@@ -415,13 +415,11 @@ static PyObject *context_get(ContextData *self, PyObject *args) {
 static PyObject *context_set(ContextData *self, PyObject *args) {
 	const char *name;
 	PyObject *item;
-	int success = 0;
-	// A return value of NULL means an exception.
-	PyObject *return_value = NULL;
 	if (!PyArg_ParseTuple(args, "sO", &name, &item)) {
 		return NULL;
 	}
 	JSValue global = JS_GetGlobalObject(self->context);
+	int success = 0;
 	if (python_to_quickjs_possible(self, item)) {
 		JS_SetPropertyStr(self->context, global, name, python_to_quickjs(self, item));
 		success = 1;
