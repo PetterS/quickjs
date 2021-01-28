@@ -409,6 +409,31 @@ static PyObject *context_get(ContextData *self, PyObject *args) {
 	return quickjs_to_python(self, value);
 }
 
+// _quickjs.Context.set
+//
+// Sets a global variable to the JS context.
+static PyObject *context_set(ContextData *self, PyObject *args) {
+	const char *name;
+	PyObject *item;
+	int success = 0;
+	// A return value of NULL means an exception.
+	PyObject *return_value = NULL;
+	if (!PyArg_ParseTuple(args, "sO", &name, &item)) {
+		return NULL;
+	}
+	JSValue global = JS_GetGlobalObject(self->context);
+	if (python_to_quickjs_possible(self, item)) {
+		JS_SetPropertyStr(self->context, global, name, python_to_quickjs(self, item));
+		success = 1;
+	}
+	JS_FreeValue(self->context, global);
+	if (success) {
+		Py_RETURN_NONE;
+	} else {
+		return NULL;
+	}
+}
+
 // _quickjs.Context.set_memory_limit
 //
 // Sets the memory limit of the context.
@@ -611,6 +636,7 @@ static PyMethodDef context_methods[] = {
      "Evaluates a Javascript string as a module."},
     {"parse_json", (PyCFunction)context_parse_json, METH_VARARGS, "Parses a JSON string."},
     {"get", (PyCFunction)context_get, METH_VARARGS, "Gets a Javascript global variable."},
+    {"set", (PyCFunction)context_set, METH_VARARGS, "Sets a Javascript global variable."},
     {"set_memory_limit",
      (PyCFunction)context_set_memory_limit,
      METH_VARARGS,
