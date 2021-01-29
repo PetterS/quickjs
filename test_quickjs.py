@@ -55,6 +55,13 @@ class Context(unittest.TestCase):
         self.assertEqual(self.context.get("y"), "foo")
         self.assertEqual(self.context.get("z"), None)
 
+    def test_set(self):
+        self.context.eval("x = 'overriden'")
+        self.context.set("x", 42)
+        self.context.set("y", "foo")
+        self.assertTrue(self.context.eval("x == 42"))
+        self.assertTrue(self.context.eval("y == 'foo'"))
+
     def test_module(self):
         self.context.module("""
             export function test() {
