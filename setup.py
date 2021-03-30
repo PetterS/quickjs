@@ -16,14 +16,10 @@ if sys.platform == "win32":
     #    system PATH when compiling.
     # 3. The code below will moneky-patch distutils to work.
     import distutils.cygwinccompiler
-    distutils.cygwinccompiler.get_msvcr = lambda: []
-    # Escaping works differently.
-    CONFIG_VERSION = f'\\"{CONFIG_VERSION}\\"'
+    distutils.cygwinccompiler.get_msvcr = lambda: [] 
     # Make sure that pthreads is linked statically, otherwise we run into problems
     # on computers where it is not installed.
     extra_link_args = ["-static"]
-else:
-    CONFIG_VERSION = f'"{CONFIG_VERSION}"'
 
 
 def get_c_sources(include_headers=False):
@@ -35,7 +31,7 @@ def get_c_sources(include_headers=False):
 
 _quickjs = Extension(
     '_quickjs',
-    define_macros=[('CONFIG_VERSION', CONFIG_VERSION)],
+    define_macros=[('CONFIG_VERSION', f'"{CONFIG_VERSION}"')],
     # HACK.
     # See https://github.com/pypa/packaging-problems/issues/84.
     sources=get_c_sources(include_headers=("sdist" in sys.argv)),
