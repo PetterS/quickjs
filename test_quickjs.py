@@ -560,8 +560,10 @@ class QJS(object):
 
 
 class QuickJSContextInClass(unittest.TestCase):
-    @unittest.expectedFailure
     def test_github_issue_7(self):
-        # This gives stack overflow internal error, due to how QuickJS calculates stack frames.
+        # This used to give stack overflow internal error, due to how QuickJS calculates stack
+        # frames. Passes with the 2021-03-27 release.
+        # 
+        # TODO: Use the new JS_UpdateStackTop function in order to better handle stacks.
         qjs = QJS()
         self.assertEqual(qjs.interp.eval('2+2'), 4)
