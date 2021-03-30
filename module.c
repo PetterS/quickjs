@@ -419,13 +419,15 @@ static PyObject *context_set(ContextData *self, PyObject *args) {
 		return NULL;
 	}
 	JSValue global = JS_GetGlobalObject(self->context);
-	int success = 0;
+	int ret = 0;
 	if (python_to_quickjs_possible(self, item)) {
-		JS_SetPropertyStr(self->context, global, name, python_to_quickjs(self, item));
-		success = 1;
+		ret = JS_SetPropertyStr(self->context, global, name, python_to_quickjs(self, item));
+		if (ret != 1) {
+			PyErr_SetString(PyExc_TypeError, "Failed setting the variable.");
+		}
 	}
 	JS_FreeValue(self->context, global);
-	if (success) {
+	if (ret == 1) {
 		Py_RETURN_NONE;
 	} else {
 		return NULL;
