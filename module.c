@@ -568,6 +568,7 @@ static JSValue js_c_function(
 	PyObject *result = PyObject_CallObject(node->obj, args);
 	Py_DECREF(args);
 	if (!result) {
+		PyErr_WriteUnraisable(node->obj);
 		end_call_python(context);
 		return JS_ThrowInternalError(ctx, "Python call failed.");
 	}
