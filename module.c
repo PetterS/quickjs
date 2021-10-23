@@ -658,7 +658,7 @@ static PyMethodDef context_methods[] = {
      (PyCFunction)context_module,
      METH_VARARGS,
      "Evaluates a Javascript string as a module."},
-    {"execute_pending_job", (PyCFunction)context_execute_pending_job, METH_NOARGS, "Execute a pending job."},
+    {"execute_pending_job", (PyCFunction)context_execute_pending_job, METH_NOARGS, "Executes a pending job."},
     {"parse_json", (PyCFunction)context_parse_json, METH_VARARGS, "Parses a JSON string."},
     {"get", (PyCFunction)context_get, METH_VARARGS, "Gets a Javascript global variable."},
     {"set", (PyCFunction)context_set, METH_VARARGS, "Sets a Javascript global variable."},
