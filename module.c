@@ -29,6 +29,9 @@ typedef struct {
 	InterruptData interrupt_data;
 	// NULL-terminated singly linked list of callable Python objects that we need to keep alive.
 	PythonCallableNode *python_callables;
+	PyObject *last_python_error_type;
+	PyObject *last_python_error_value;
+	PyObject *last_python_error_traceback;
 } ContextData;
 
 // The data of the type _quickjs.Object.
@@ -259,6 +262,35 @@ static PyObject *quickjs_to_python(ContextData *context_obj, JSValue value) {
 		JSValue exception = JS_GetException(context);
 		const char *cstring = JS_ToCString(context, exception);
 		const char *stack_cstring = NULL;
+		PyObject *py_stack = NULL;
+		if (context_obj->last_python_error_value == NULL) {
+			py_stack = PyUnicode_FromString("");
+		} else {
+			PyObject *tbm = PyImport_ImportModule("traceback");
+			PyObject *tbfmt = PyObject_GetAttrString(tbm, "format_exception");
+			PyObject *tbstrs = PyObject_CallFunctionObjArgs(
+				tbfmt,
+				context_obj->last_python_error_type,
+				context_obj->last_python_error_value,
+				context_obj->last_python_error_traceback,
+				NULL);
+			PyObject *tbinfo = PyUnicode_FromString(
+				"\nThe above exception was caused by the following exception:\n\n");
+			PyList_Insert(tbstrs, 0, tbinfo);
+			PyObject *sep = PyUnicode_FromString("");
+			py_stack = PyUnicode_Join(sep, tbstrs);
+			Py_DECREF(sep);
+			Py_DECREF(tbinfo);
+			Py_DECREF(tbstrs);
+			Py_DECREF(tbfmt);
+			Py_DECREF(tbm);
+			Py_DECREF(context_obj->last_python_error_type);
+			Py_DECREF(context_obj->last_python_error_value);
+			Py_DECREF(context_obj->last_python_error_traceback);
+			context_obj->last_python_error_type = NULL;
+			context_obj->last_python_error_value = NULL;
+			context_obj->last_python_error_traceback = NULL;
+		}
 		if (!JS_IsNull(exception) && !JS_IsUndefined(exception)) {
 			JSValue stack = JS_GetPropertyStr(context, exception, "stack");
 			if (!JS_IsException(stack)) {
@@ -269,9 +301,9 @@ static PyObject *quickjs_to_python(ContextData *context_obj, JSValue value) {
 		if (cstring != NULL) {
 			const char *safe_stack_cstring = stack_cstring ? stack_cstring : "";
 			if (strstr(cstring, "stack overflow") != NULL) {
-				PyErr_Format(StackOverflow, "%s\n%s", cstring, safe_stack_cstring);
+				PyErr_Format(StackOverflow, "%s\n%s%U", cstring, safe_stack_cstring, py_stack);
 			} else {
-				PyErr_Format(JSException, "%s\n%s", cstring, safe_stack_cstring);
+				PyErr_Format(JSException, "%s\n%s%U", cstring, safe_stack_cstring, py_stack);
 			}
 		} else {
 			// This has been observed to happen when different threads have used the same QuickJS
@@ -280,6 +312,7 @@ static PyObject *quickjs_to_python(ContextData *context_obj, JSValue value) {
 			PyErr_Format(JSException,
 			             "(Failed obtaining QuickJS error string. Concurrency issue?)");
 		}
+		Py_DECREF(py_stack);
 		JS_FreeCString(context, cstring);
 		JS_FreeCString(context, stack_cstring);
 		JS_FreeValue(context, exception);
@@ -330,6 +363,9 @@ static PyObject *context_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 		self->time_limit = 0;
 		self->thread_state = NULL;
 		self->python_callables = NULL;
+		self->last_python_error_type = NULL;
+		self->last_python_error_value = NULL;
+		self->last_python_error_traceback = NULL;
 		JS_SetContextOpaque(self->context, self);
 	}
 	return (PyObject *)self;
@@ -347,6 +383,9 @@ static void context_dealloc(ContextData *self) {
 		Py_DECREF(this->obj);
 		PyMem_Free(this);
 	}
+	Py_XDECREF(self->last_python_error_type);
+	Py_XDECREF(self->last_python_error_value);
+	Py_XDECREF(self->last_python_error_traceback);
 	Py_TYPE(self)->tp_free((PyObject *)self);
 }
 
@@ -568,6 +607,17 @@ static JSValue js_c_function(
 	PyObject *result = PyObject_CallObject(node->obj, args);
 	Py_DECREF(args);
 	if (!result) {
+		Py_XDECREF(context->last_python_error_type);
+		Py_XDECREF(context->last_python_error_value);
+		Py_XDECREF(context->last_python_error_traceback);
+		PyErr_Fetch(
+			&context->last_python_error_type,
+			&context->last_python_error_value,
+			&context->last_python_error_traceback);
+		PyErr_NormalizeException(
+			&context->last_python_error_type,
+			&context->last_python_error_value,
+			&context->last_python_error_traceback);
 		end_call_python(context);
 		return JS_ThrowInternalError(ctx, "Python call failed.");
 	}
