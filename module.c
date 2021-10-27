@@ -263,7 +263,7 @@ static PyObject *quickjs_to_python(ContextData *context_obj, JSValue value) {
 		const char *cstring = JS_ToCString(context, exception);
 		const char *stack_cstring = NULL;
 		PyObject *py_stack = NULL;
-		if (context_obj->last_python_error_value == NULL) {
+		if (context_obj->last_python_error_value == NULL || cstring == NULL || strstr(cstring, "Python call failed.") == NULL) {
 			py_stack = PyUnicode_FromString("");
 		} else {
 			PyObject *tbm = PyImport_ImportModule("traceback");
