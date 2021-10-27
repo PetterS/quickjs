@@ -268,25 +268,32 @@ static PyObject *quickjs_to_python(ContextData *context_obj, JSValue value) {
 		} else {
 			PyObject *tbm = PyImport_ImportModule("traceback");
 			PyObject *tbfmt = PyObject_GetAttrString(tbm, "format_exception");
-			PyObject *tbstrs = PyObject_CallFunctionObjArgs(
-				tbfmt,
-				context_obj->last_python_error_type,
-				context_obj->last_python_error_value,
-				context_obj->last_python_error_traceback,
-				NULL);
+			PyObject *errv = context_obj->last_python_error_value;
+			if (errv == NULL) {
+				errv = Py_None;
+			}
+			PyObject *errtb = context_obj->last_python_error_traceback;
+			if (errtb == NULL) {
+				errtb = Py_None;
+			}
+			Py_INCREF(errv);
+			Py_INCREF(errtb);
+			PyObject *tbstrs = PyObject_CallFunctionObjArgs(tbfmt, context_obj->last_python_error_type, errv, errtb, NULL);
 			PyObject *tbinfo = PyUnicode_FromString(
 				"\nThe above exception was caused by the following exception:\n\n");
 			PyList_Insert(tbstrs, 0, tbinfo);
 			PyObject *sep = PyUnicode_FromString("");
 			py_stack = PyUnicode_Join(sep, tbstrs);
+			Py_DECREF(errtb);
+			Py_DECREF(errv);
 			Py_DECREF(sep);
 			Py_DECREF(tbinfo);
 			Py_DECREF(tbstrs);
 			Py_DECREF(tbfmt);
 			Py_DECREF(tbm);
 			Py_DECREF(context_obj->last_python_error_type);
-			Py_DECREF(context_obj->last_python_error_value);
-			Py_DECREF(context_obj->last_python_error_traceback);
+			Py_XDECREF(context_obj->last_python_error_value);
+			Py_XDECREF(context_obj->last_python_error_traceback);
 			context_obj->last_python_error_type = NULL;
 			context_obj->last_python_error_value = NULL;
 			context_obj->last_python_error_traceback = NULL;
