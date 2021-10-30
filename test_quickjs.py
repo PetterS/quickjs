@@ -502,6 +502,12 @@ class JavascriptFeatures(unittest.TestCase):
         self.assertEqual(f(11), 11)
         self.assertEqual(f(None), 42)
 
+    def test_symbol_conversion(self):
+        context = quickjs.Context()
+        context.eval("a = Symbol();")
+        context.set("b", context.eval("a"))
+        self.assertTrue(context.eval("a === b"))
+
 
 class Threads(unittest.TestCase):
     def setUp(self):

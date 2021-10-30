@@ -289,7 +289,7 @@ static PyObject *quickjs_to_python(ContextData *context_obj, JSValue value) {
 		const char *cstring = JS_ToCString(context, value);
 		return_value = Py_BuildValue("s", cstring);
 		JS_FreeCString(context, cstring);
-	} else if (tag == JS_TAG_OBJECT || tag == JS_TAG_MODULE) {
+	} else if (tag == JS_TAG_OBJECT || tag == JS_TAG_MODULE || tag == JS_TAG_SYMBOL) {
 		// This is a Javascript object or function. We wrap it in a _quickjs.Object.
 		return_value = PyObject_CallObject((PyObject *)&Object, NULL);
 		ObjectData *object = (ObjectData *)return_value;
