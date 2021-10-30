@@ -187,7 +187,14 @@ static JSValueConst python_to_quickjs(ContextData *context, PyObject *item) {
 	if (PyBool_Check(item)) {
 		return JS_MKVAL(JS_TAG_BOOL, item == Py_True ? 1 : 0);
 	} else if (PyLong_Check(item)) {
-		return JS_MKVAL(JS_TAG_INT, PyLong_AsLong(item));
+		int overflow;
+		long value = PyLong_AsLongAndOverflow(item, &overflow);
+		if (overflow) {
+			PyObject *float_value = PyNumber_Float(item);
+			return JS_NewFloat64(context->context, PyFloat_AsDouble(float_value));
+		} else {
+			return JS_MKVAL(JS_TAG_INT, value);
+		}
 	} else if (PyFloat_Check(item)) {
 		return JS_NewFloat64(context->context, PyFloat_AsDouble(item));
 	} else if (item == Py_None) {
