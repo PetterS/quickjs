@@ -243,6 +243,20 @@ class CallIntoPython(unittest.TestCase):
             # instead of a JS exception.
             self.context.eval("test_list()")
 
+    def test_python_exception_with_object_return_does_not_raise_system_error(self):
+        # https://github.com/PetterS/quickjs/issues/66
+
+        def python_raise():
+            raise Exception
+
+        self.context.add_callable("python_raise", python_raise)
+        # When called, `a` should return an object (a promise),
+        # even though a Python error is generated in the background.
+        self.context.eval("async function a() {await python_raise();}")
+        # With incorrect error handling, this raised a SystemError in dev builds,
+        # and segfaulted in prod builds.
+        self.assertEqual(self.context.eval("typeof a();"), "object")
+
 
 class Object(unittest.TestCase):
     def setUp(self):
