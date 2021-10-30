@@ -502,6 +502,11 @@ class JavascriptFeatures(unittest.TestCase):
         self.assertEqual(f(11), 11)
         self.assertEqual(f(None), 42)
 
+    def test_bigint(self):
+        context = quickjs.Context()
+        self.assertEqual(context.eval(f"BigInt('{10**100}')"), 10**100)
+        self.assertEqual(context.eval(f"BigInt('{-10**100}')"), -10**100)
+
 
 class Threads(unittest.TestCase):
     def setUp(self):
