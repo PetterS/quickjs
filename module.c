@@ -187,7 +187,14 @@ static JSValueConst python_to_quickjs(ContextData *context, PyObject *item) {
 	if (PyBool_Check(item)) {
 		return JS_MKVAL(JS_TAG_BOOL, item == Py_True ? 1 : 0);
 	} else if (PyLong_Check(item)) {
-		return JS_MKVAL(JS_TAG_INT, PyLong_AsLong(item));
+		int overflow;
+		long value = PyLong_AsLongAndOverflow(item, &overflow);
+		if (overflow) {
+			PyObject *float_value = PyNumber_Float(item);
+			return JS_NewFloat64(context->context, PyFloat_AsDouble(float_value));
+		} else {
+			return JS_MKVAL(JS_TAG_INT, value);
+		}
 	} else if (PyFloat_Check(item)) {
 		return JS_NewFloat64(context->context, PyFloat_AsDouble(item));
 	} else if (item == Py_None) {
@@ -293,7 +300,7 @@ static PyObject *quickjs_to_python(ContextData *context_obj, JSValue value) {
 		const char *cstring = JS_ToCString(context, value);
 		return_value = Py_BuildValue("s", cstring);
 		JS_FreeCString(context, cstring);
-	} else if (tag == JS_TAG_OBJECT || tag == JS_TAG_MODULE) {
+	} else if (tag == JS_TAG_OBJECT || tag == JS_TAG_MODULE || tag == JS_TAG_SYMBOL) {
 		// This is a Javascript object or function. We wrap it in a _quickjs.Object.
 		return_value = PyObject_CallObject((PyObject *)&Object, NULL);
 		ObjectData *object = (ObjectData *)return_value;

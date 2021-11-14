@@ -502,11 +502,24 @@ class JavascriptFeatures(unittest.TestCase):
         self.assertEqual(f(11), 11)
         self.assertEqual(f(None), 42)
 
+    def test_symbol_conversion(self):
+        context = quickjs.Context()
+        context.eval("a = Symbol();")
+        context.set("b", context.eval("a"))
+        self.assertTrue(context.eval("a === b"))
+
+    def test_large_python_integers_to_quickjs(self):
+        context = quickjs.Context()
+        # Without a careful implementation, this made Python raise a SystemError/OverflowError.
+        context.set("v", 10**25)
+        # There is precision loss occurring in JS due to
+        # the floating point implementation of numbers.
+        self.assertTrue(context.eval("v == 1e25"))
+
     def test_bigint(self):
         context = quickjs.Context()
         self.assertEqual(context.eval(f"BigInt('{10**100}')"), 10**100)
         self.assertEqual(context.eval(f"BigInt('{-10**100}')"), -10**100)
-
 
 class Threads(unittest.TestCase):
     def setUp(self):
