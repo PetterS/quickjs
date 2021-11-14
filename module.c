@@ -387,11 +387,9 @@ static PyObject *context_module(ContextData *self, PyObject *args) {
 //
 // If there are pending jobs, executes one and returns True. Else returns False.
 static PyObject *context_execute_pending_job(ContextData *self) {
-	JSContext *ctx;
-	JSValue value;
-	int ret;
 	prepare_call_js(self);
-	ret = JS_ExecutePendingJob(self->runtime, &ctx);
+	JSContext *ctx;
+	int ret = JS_ExecutePendingJob(self->runtime, &ctx);
 	end_call_js(self);
 	if (ret > 0) {
 		Py_RETURN_TRUE;
