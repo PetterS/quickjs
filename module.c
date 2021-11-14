@@ -251,6 +251,7 @@ static PyObject *quickjs_to_python(ContextData *context_obj, JSValue value) {
 	} else if (tag == JS_TAG_BIG_INT) {
 		const char *cstring = JS_ToCString(context, value);
 		return_value = PyLong_FromString(cstring, NULL, 10);
+		JS_FreeCString(context, cstring);
 	} else if (tag == JS_TAG_BOOL) {
 		return_value = Py_BuildValue("O", JS_VALUE_GET_BOOL(value) ? Py_True : Py_False);
 	} else if (tag == JS_TAG_NULL) {
