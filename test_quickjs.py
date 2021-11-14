@@ -516,6 +516,11 @@ class JavascriptFeatures(unittest.TestCase):
         # the floating point implementation of numbers.
         self.assertTrue(context.eval("v == 1e25"))
 
+    def test_bigint(self):
+        context = quickjs.Context()
+        self.assertEqual(context.eval(f"BigInt('{10**100}')"), 10**100)
+        self.assertEqual(context.eval(f"BigInt('{-10**100}')"), -10**100)
+
 class Threads(unittest.TestCase):
     def setUp(self):
         self.context = quickjs.Context()
