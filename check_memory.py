@@ -15,23 +15,28 @@ def run():
     runner = unittest.TextTestRunner()
     runner.run(suite)
 
+filters = [
+    tracemalloc.Filter(True, quickjs.__file__),
+    tracemalloc.Filter(True, test_quickjs.__file__),
+]
+
 def main():
     print("Warming up (to discount regex cache etc.)")
     run()
 
     tracemalloc.start(25)
     gc.collect()
-    snapshot1 = tracemalloc.take_snapshot()
+    snapshot1 = tracemalloc.take_snapshot().filter_traces(filters)
     run()
     gc.collect()
-    snapshot2 = tracemalloc.take_snapshot()
+    snapshot2 = tracemalloc.take_snapshot().filter_traces(filters)
 
     top_stats = snapshot2.compare_to(snapshot1, 'traceback')
 
     print("Objects not released")
     print("====================")
     for stat in top_stats:
-        if "tracemalloc.py" in str(stat) or stat.size_diff == 0:
+        if stat.size_diff == 0:
             continue
         print(stat)
         for line in stat.traceback.format():
