@@ -191,7 +191,9 @@ static JSValueConst python_to_quickjs(ContextData *context, PyObject *item) {
 		long value = PyLong_AsLongAndOverflow(item, &overflow);
 		if (overflow) {
 			PyObject *float_value = PyNumber_Float(item);
-			return JS_NewFloat64(context->context, PyFloat_AsDouble(float_value));
+			double double_value = PyFloat_AsDouble(float_value);
+			Py_DECREF(float_value);
+			return JS_NewFloat64(context->context, double_value);
 		} else {
 			return JS_MKVAL(JS_TAG_INT, value);
 		}
