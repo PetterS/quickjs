@@ -73,6 +73,10 @@ class Function:
         with self._lock:
             self._context.gc()
 
+    def execute_pending_job(self) -> bool:
+        with self._lock:
+            return self._context.execute_pending_job()
+
     def _compile(self, name: str, code: str) -> Tuple[Context, Object]:
         context = Context()
         context.eval(code)

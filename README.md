@@ -39,6 +39,7 @@ The `Function` class has, apart from being a callable, additional methods:
 - `set_max_stack_size`
 - `memory` – returns a dict with information about memory usage.
 - `add_callable` – adds a Python function and makes it callable from JS.
+- `execute_pending_job` – executes a pending job (such as a async function or Promise).
 
 ## Documentation
 For full functionality, please see `test_quickjs.py`
