@@ -246,6 +246,37 @@ static PyObject *object_call(ObjectData *self, PyObject *args, PyObject *kwds) {
 	return quickjs_to_python(self->context, value);
 }
 
+// Converts the current Javascript exception to a Python exception via a C string.
+static void quickjs_exception_to_python(JSContext *context) {
+	JSValue exception = JS_GetException(context);
+	const char *cstring = JS_ToCString(context, exception);
+	const char *stack_cstring = NULL;
+	if (!JS_IsNull(exception) && !JS_IsUndefined(exception)) {
+		JSValue stack = JS_GetPropertyStr(context, exception, "stack");
+		if (!JS_IsException(stack)) {
+			stack_cstring = JS_ToCString(context, stack);
+			JS_FreeValue(context, stack);
+		}
+	}
+	if (cstring != NULL) {
+		const char *safe_stack_cstring = stack_cstring ? stack_cstring : "";
+		if (strstr(cstring, "stack overflow") != NULL) {
+			PyErr_Format(StackOverflow, "%s\n%s", cstring, safe_stack_cstring);
+		} else {
+			PyErr_Format(JSException, "%s\n%s", cstring, safe_stack_cstring);
+		}
+	} else {
+		// This has been observed to happen when different threads have used the same QuickJS
+		// runtime, but not at the same time.
+		// Could potentially be another problem though, since JS_ToCString may return NULL.
+		PyErr_Format(JSException,
+					 "(Failed obtaining QuickJS error string. Concurrency issue?)");
+	}
+	JS_FreeCString(context, cstring);
+	JS_FreeCString(context, stack_cstring);
+	JS_FreeValue(context, exception);
+}
+
 // Converts a JSValue to a Python object.
 //
 // Takes ownership of the JSValue and will deallocate it (refcount reduced by 1).
@@ -268,34 +299,7 @@ static PyObject *quickjs_to_python(ContextData *context_obj, JSValue value) {
 	} else if (tag == JS_TAG_UNDEFINED) {
 		return_value = Py_None;
 	} else if (tag == JS_TAG_EXCEPTION) {
-		// We have a Javascript exception. We convert it to a Python exception via a C string.
-		JSValue exception = JS_GetException(context);
-		const char *cstring = JS_ToCString(context, exception);
-		const char *stack_cstring = NULL;
-		if (!JS_IsNull(exception) && !JS_IsUndefined(exception)) {
-			JSValue stack = JS_GetPropertyStr(context, exception, "stack");
-			if (!JS_IsException(stack)) {
-				stack_cstring = JS_ToCString(context, stack);
-				JS_FreeValue(context, stack);
-			}
-		}
-		if (cstring != NULL) {
-			const char *safe_stack_cstring = stack_cstring ? stack_cstring : "";
-			if (strstr(cstring, "stack overflow") != NULL) {
-				PyErr_Format(StackOverflow, "%s\n%s", cstring, safe_stack_cstring);
-			} else {
-				PyErr_Format(JSException, "%s\n%s", cstring, safe_stack_cstring);
-			}
-		} else {
-			// This has been observed to happen when different threads have used the same QuickJS
-			// runtime, but not at the same time.
-			// Could potentially be another problem though, since JS_ToCString may return NULL.
-			PyErr_Format(JSException,
-			             "(Failed obtaining QuickJS error string. Concurrency issue?)");
-		}
-		JS_FreeCString(context, cstring);
-		JS_FreeCString(context, stack_cstring);
-		JS_FreeValue(context, exception);
+		quickjs_exception_to_python(context);
 	} else if (tag == JS_TAG_FLOAT64) {
 		return_value = Py_BuildValue("d", JS_VALUE_GET_FLOAT64(value));
 	} else if (tag == JS_TAG_STRING) {
@@ -390,6 +394,24 @@ static PyObject *context_eval(ContextData *self, PyObject *args) {
 // Evaluates a Python string as JS module. Otherwise identical to eval.
 static PyObject *context_module(ContextData *self, PyObject *args) {
 	return context_eval_internal(self, args, JS_EVAL_TYPE_MODULE);
+}
+
+// _quickjs.Context.execute_pending_job
+//
+// If there are pending jobs, executes one and returns True. Else returns False.
+static PyObject *context_execute_pending_job(ContextData *self) {
+	prepare_call_js(self);
+	JSContext *ctx;
+	int ret = JS_ExecutePendingJob(self->runtime, &ctx);
+	end_call_js(self);
+	if (ret > 0) {
+		Py_RETURN_TRUE;
+	} else if (ret == 0) {
+		Py_RETURN_FALSE;
+	} else {
+		quickjs_exception_to_python(ctx);
+		return NULL;
+	}
 }
 
 // _quickjs.Context.parse_json
@@ -647,6 +669,7 @@ static PyMethodDef context_methods[] = {
      (PyCFunction)context_module,
      METH_VARARGS,
      "Evaluates a Javascript string as a module."},
+    {"execute_pending_job", (PyCFunction)context_execute_pending_job, METH_NOARGS, "Executes a pending job."},
     {"parse_json", (PyCFunction)context_parse_json, METH_VARARGS, "Parses a JSON string."},
     {"get", (PyCFunction)context_get, METH_VARARGS, "Gets a Javascript global variable."},
     {"set", (PyCFunction)context_set, METH_VARARGS, "Sets a Javascript global variable."},
