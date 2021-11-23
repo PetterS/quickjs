@@ -150,6 +150,14 @@ class Context(unittest.TestCase):
         with self.assertRaisesRegex(quickjs.JSException, "unexpected token"):
             self.context.parse_json("a b c")
 
+    def test_execute_pending_job(self):
+        self.context.eval("obj = {}")
+        self.assertEqual(self.context.execute_pending_job(), False)
+        self.context.eval("Promise.resolve().then(() => {obj.x = 1;})")
+        self.assertEqual(self.context.execute_pending_job(), True)
+        self.assertEqual(self.context.eval("obj.x"), 1)
+        self.assertEqual(self.context.execute_pending_job(), False)
+
 
 class CallIntoPython(unittest.TestCase):
     def setUp(self):
@@ -464,6 +472,26 @@ class FunctionTest(unittest.TestCase):
         f.add_callable("pfunc", lambda: 42)
 
         self.assertEqual(f(), 42)
+
+    def test_execute_pending_job(self):
+        f = quickjs.Function(
+            "f", """
+            obj = {x: 0, y: 0};
+            async function a() {
+                obj.x = await 1;
+            }
+            a();
+            Promise.resolve().then(() => {obj.y = 1});
+            function f() {
+                return obj.x + obj.y;
+            }
+        """)
+        self.assertEqual(f(), 0)
+        self.assertEqual(f.execute_pending_job(), True)
+        self.assertEqual(f(), 1)
+        self.assertEqual(f.execute_pending_job(), True)
+        self.assertEqual(f(), 2)
+        self.assertEqual(f.execute_pending_job(), False)
 
 
 class JavascriptFeatures(unittest.TestCase):
