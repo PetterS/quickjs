@@ -102,10 +102,15 @@ static void end_call_python(ContextData *context) {
 	context->thread_state = PyEval_SaveThread();
 }
 
+// GC traversal.
+static int object_traverse(ObjectData *self, visitproc visit, void *arg) {
+	Py_VISIT(self->context);
+	return 0;
+}
+
 // Creates an instance of the Object class.
 static PyObject *object_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
-	ObjectData *self;
-	self = (ObjectData *)type->tp_alloc(type, 0);
+	ObjectData *self = PyObject_GC_New(ObjectData, type);
 	if (self != NULL) {
 		self->context = NULL;
 	}
@@ -115,12 +120,13 @@ static PyObject *object_new(PyTypeObject *type, PyObject *args, PyObject *kwds) 
 // Deallocates an instance of the Object class.
 static void object_dealloc(ObjectData *self) {
 	if (self->context) {
+		PyObject_GC_UnTrack(self);
 		JS_FreeValue(self->context->context, self->object);
 		// We incremented the refcount of the context when we created this object, so we should
 		// decrease it now so we don't leak memory.
 		Py_DECREF(self->context);
 	}
-	Py_TYPE(self)->tp_free((PyObject *)self);
+	PyObject_GC_Del(self);
 }
 
 // _quickjs.Object.__call__
@@ -146,7 +152,8 @@ static PyTypeObject Object = {PyVarObject_HEAD_INIT(NULL, 0).tp_name = "_quickjs
                               .tp_doc = "Quickjs object",
                               .tp_basicsize = sizeof(ObjectData),
                               .tp_itemsize = 0,
-                              .tp_flags = Py_TPFLAGS_DEFAULT,
+                              .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
+                              .tp_traverse = (traverseproc)object_traverse,
                               .tp_new = object_new,
                               .tp_dealloc = (destructor)object_dealloc,
                               .tp_call = (ternaryfunc)object_call,
@@ -314,6 +321,7 @@ static PyObject *quickjs_to_python(ContextData *context_obj, JSValue value) {
 		// will result in a segfault with high probability.
 		Py_INCREF(context_obj);
 		object->context = context_obj;
+		PyObject_GC_Track(object);
 		object->object = JS_DupValue(context, value);
 	} else {
 		PyErr_Format(PyExc_TypeError, "Unknown quickjs tag: %d", tag);
@@ -334,10 +342,30 @@ static PyObject *test(PyObject *self, PyObject *args) {
 // Global state of the module. Currently none.
 struct module_state {};
 
+// GC traversal.
+static int context_traverse(ContextData *self, visitproc visit, void *arg) {
+	PythonCallableNode *node = self->python_callables;
+	while (node) {
+		Py_VISIT(node->obj);
+		node = node->next;
+	}
+	return 0;
+}
+
+// GC clearing. Object does not have a clearing method, therefore dependency cycles
+// between Context and Object will always be cleared starting here.
+static int context_clear(ContextData *self) {
+	PythonCallableNode *node = self->python_callables;
+	while (node) {
+		Py_CLEAR(node->obj);
+		node = node->next;
+	}
+	return 0;
+}
+
 // Creates an instance of the _quickjs.Context class.
 static PyObject *context_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
-	ContextData *self;
-	self = (ContextData *)type->tp_alloc(type, 0);
+	ContextData *self = PyObject_GC_New(ContextData, type);
 	if (self != NULL) {
 		// We never have different contexts for the same runtime. This way, different
 		// _quickjs.Context can be used concurrently.
@@ -348,6 +376,7 @@ static PyObject *context_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 		self->thread_state = NULL;
 		self->python_callables = NULL;
 		JS_SetContextOpaque(self->context, self);
+		PyObject_GC_Track(self);
 	}
 	return (PyObject *)self;
 }
@@ -356,15 +385,17 @@ static PyObject *context_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 static void context_dealloc(ContextData *self) {
 	JS_FreeContext(self->context);
 	JS_FreeRuntime(self->runtime);
+	PyObject_GC_UnTrack(self);
 	PythonCallableNode *node = self->python_callables;
 	self->python_callables = NULL;
 	while (node) {
 		PythonCallableNode *this = node;
 		node = node->next;
-		Py_DECREF(this->obj);
+		// this->obj may already be NULL if GC'ed right before through context_clear.
+		Py_XDECREF(this->obj);
 		PyMem_Free(this);
 	}
-	Py_TYPE(self)->tp_free((PyObject *)self);
+	PyObject_GC_Del(self);
 }
 
 // Evaluates a Python string as JS and returns the result as a Python object. Will return
@@ -696,7 +727,9 @@ static PyTypeObject Context = {PyVarObject_HEAD_INIT(NULL, 0).tp_name = "_quickj
                                .tp_doc = "Quickjs context",
                                .tp_basicsize = sizeof(ContextData),
                                .tp_itemsize = 0,
-                               .tp_flags = Py_TPFLAGS_DEFAULT,
+                               .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
+                               .tp_traverse = (traverseproc)context_traverse,
+                               .tp_clear = (inquiry)context_clear,
                                .tp_new = context_new,
                                .tp_dealloc = (destructor)context_dealloc,
                                .tp_methods = context_methods};
