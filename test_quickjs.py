@@ -256,8 +256,10 @@ class CallIntoPython(unittest.TestCase):
         def tracker(promise, reason, is_handled):
             called[0] += 1
             self.assertFalse(is_handled)
+            self.context.set("reason", reason)
+            self.assertTrue(self.context.eval("reason.message === 'x';"))
         def run_async_error():
-            self.context.eval("function f() {throw Error;}")
+            self.context.eval("function f() {throw Error('x');}")
             self.context.eval("async function g() {await f();}")
             self.context.eval("g()")
         self.context.set_promise_rejection_tracker(tracker)
