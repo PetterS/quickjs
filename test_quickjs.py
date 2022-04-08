@@ -547,6 +547,21 @@ class FunctionTest(unittest.TestCase):
         self.assertEqual(f(), 2)
         self.assertEqual(f.execute_pending_job(), False)
 
+    def test_promise_rejection_tracker(self):
+        called = [0]
+        def tracker(promise, reason, is_handled):
+            called[0] += 1
+            self.assertFalse(is_handled)
+        f = quickjs.Function(
+            "f", """
+            function g() {throw Error('x');}
+            async function h() {await g();}
+            function f() {h();}
+        """)
+        f.set_promise_rejection_tracker(tracker)
+        f()
+        self.assertEqual(called[0], 1)
+
 
 class JavascriptFeatures(unittest.TestCase):
     def test_unicode_strings(self):
