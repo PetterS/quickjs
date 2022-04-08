@@ -24,6 +24,7 @@ typedef struct {
 	JSContext *context;
 	int has_time_limit;
 	clock_t time_limit;
+	PyObject *promise_rejection_tracker_callback;
 	// Used when releasing the GIL.
 	PyThreadState *thread_state;
 	InterruptData interrupt_data;
@@ -100,6 +101,45 @@ static void prepare_call_python(ContextData *context) {
 static void end_call_python(ContextData *context) {
 	assert(!context->thread_state);
 	context->thread_state = PyEval_SaveThread();
+}
+
+static void js_python_promise_rejection_tracker(
+	JSContext *ctx, JSValueConst promise, JSValueConst reason, int is_handled, void *opaque) {
+	ContextData *context = (ContextData *)JS_GetContextOpaque(ctx);
+	PyObject *callback = (PyObject *)opaque;
+	// Cannot call into Python with a time limit set.
+	if (context->has_time_limit) {
+		return;
+	}
+	prepare_call_python(context);
+	PyObject *py_promise = quickjs_to_python(context, JS_DupValue(ctx, promise));
+	if (py_promise == NULL) {
+		PyErr_WriteUnraisable(callback);
+		PyErr_Clear();
+		end_call_python(context);
+		return;
+	}
+	PyObject *py_reason = quickjs_to_python(context, JS_DupValue(ctx, reason));
+	if (py_reason == NULL) {
+		PyErr_WriteUnraisable(callback);
+		PyErr_Clear();
+		Py_DECREF(py_promise);
+		end_call_python(context);
+		return;
+	}
+	PyObject *py_is_handled = is_handled ? Py_True : Py_False;
+	Py_INCREF(py_is_handled);
+	PyObject *ret = PyObject_CallFunctionObjArgs(callback, py_promise, py_reason, py_is_handled, NULL);
+	if (ret == NULL) {
+		PyErr_WriteUnraisable(callback);
+		PyErr_Clear();
+	} else {
+		Py_DECREF(ret);
+	}
+	Py_DECREF(py_is_handled);
+	Py_DECREF(py_reason);
+	Py_DECREF(py_promise);
+	end_call_python(context);
 }
 
 // GC traversal.
@@ -373,6 +413,7 @@ static PyObject *context_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 		self->context = JS_NewContext(self->runtime);
 		self->has_time_limit = 0;
 		self->time_limit = 0;
+		self->promise_rejection_tracker_callback = NULL;
 		self->thread_state = NULL;
 		self->python_callables = NULL;
 		JS_SetContextOpaque(self->context, self);
@@ -386,6 +427,7 @@ static void context_dealloc(ContextData *self) {
 	JS_FreeContext(self->context);
 	JS_FreeRuntime(self->runtime);
 	PyObject_GC_UnTrack(self);
+	Py_XDECREF(self->promise_rejection_tracker_callback);
 	PythonCallableNode *node = self->python_callables;
 	self->python_callables = NULL;
 	while (node) {
@@ -538,6 +580,27 @@ static PyObject *context_set_max_stack_size(ContextData *self, PyObject *args) {
 		return NULL;
 	}
 	JS_SetMaxStackSize(self->runtime, limit);
+	Py_RETURN_NONE;
+}
+
+// _quickjs.Context.set_promise_rejection_tracker
+//
+// Sets a callback receiving (promise, reason, is_handled) when a promise is rejected.
+static PyObject *context_set_promise_rejection_tracker(ContextData *self, PyObject *args) {
+	PyObject *callback = NULL;
+	if (!PyArg_ParseTuple(args, "|O", &callback)) {
+		return NULL;
+	}
+	Py_XDECREF(self->promise_rejection_tracker_callback);
+	if (callback == NULL || callback == Py_None) {
+		self->promise_rejection_tracker_callback = NULL;
+		JS_SetHostPromiseRejectionTracker(self->runtime, NULL, NULL);
+	} else {
+		Py_INCREF(callback);
+		self->promise_rejection_tracker_callback = callback;
+		JS_SetHostPromiseRejectionTracker(self->runtime, js_python_promise_rejection_tracker,
+		                                  callback);
+	}
 	Py_RETURN_NONE;
 }
 
@@ -716,6 +779,10 @@ static PyMethodDef context_methods[] = {
      (PyCFunction)context_set_max_stack_size,
      METH_VARARGS,
      "Sets the maximum stack size in bytes. Default is 256kB."},
+    {"set_promise_rejection_tracker",
+     (PyCFunction)context_set_promise_rejection_tracker,
+     METH_VARARGS,
+     "Sets a callback receiving (promise, reason, is_handled) when a promise is rejected. Pass None to disable."},
     {"memory", (PyCFunction)context_memory, METH_NOARGS, "Returns the memory usage as a dict."},
     {"gc", (PyCFunction)context_gc, METH_NOARGS, "Runs garbage collection."},
     {"add_callable", (PyCFunction)context_add_callable, METH_VARARGS, "Wraps a Python callable."},

@@ -251,6 +251,58 @@ class CallIntoPython(unittest.TestCase):
             # instead of a JS exception.
             self.context.eval("test_list()")
 
+    def test_promise_rejection_tracker(self):
+        called = [0]
+        def tracker(promise, reason, is_handled):
+            called[0] += 1
+            self.assertFalse(is_handled)
+        def run_async_error():
+            self.context.eval("function f() {throw Error;}")
+            self.context.eval("async function g() {await f();}")
+            self.context.eval("g()")
+        self.context.set_promise_rejection_tracker(tracker)
+        run_async_error()
+        self.context.set_promise_rejection_tracker(None)
+        run_async_error()
+        self.context.set_promise_rejection_tracker()
+        run_async_error()
+        self.assertEqual(called[0], 1)
+
+    def test_promise_rejection_tracker_promise(self):
+        called = [0]
+        def tracker_false(promise, reason, is_handled):
+            called[0] += 1
+            self.assertFalse(is_handled)
+        def tracker_true(promise, reason, is_handled):
+            called[0] += 1
+            self.assertTrue(is_handled)
+        self.context.eval("Promise.reject().then(() => {}, () => {return Promise.reject();})")
+        self.context.set_promise_rejection_tracker(tracker_false)
+        self.context.execute_pending_job()
+        self.context.set_promise_rejection_tracker(tracker_true)
+        self.assertTrue(self.context.execute_pending_job())
+        self.context.set_promise_rejection_tracker(tracker_false)
+        self.assertTrue(self.context.execute_pending_job())
+        self.assertFalse(self.context.execute_pending_job())
+        self.assertEqual(called[0], 3)
+
+    def test_promise_rejection_tracker_unraisable(self):
+        import sys
+        def unraisablehook(u):
+            self.assertTrue(isinstance(u.exc_value, ZeroDivisionError))
+        unraisablehook_orig = sys.unraisablehook
+        sys.unraisablehook = unraisablehook
+        called = [0]
+        def tracker(promise, reason, is_handled):
+            called[0] += 1
+            raise ZeroDivisionError
+        self.context.set_promise_rejection_tracker(tracker)
+        self.context.eval("function f() {throw Error;}")
+        self.context.eval("async function g() {await f();}")
+        self.context.eval("g()")
+        self.assertEqual(called[0], 1)
+        sys.unraisablehook = unraisablehook_orig
+
 
 class Object(unittest.TestCase):
     def setUp(self):
