@@ -41,6 +41,7 @@ The `Function` class has, apart from being a callable, additional methods:
 - `memory` – returns a dict with information about memory usage.
 - `add_callable` – adds a Python function and makes it callable from JS.
 - `execute_pending_job` – executes a pending job (such as a async function or Promise).
+- `set_promise_rejection_tracker` - sets a callback receiving (promise, reason, is_handled) when a promise is rejected. Pass None to disable.
 
 ## Documentation
 For full functionality, please see `test_quickjs.py`

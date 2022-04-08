@@ -57,6 +57,10 @@ class Function:
         with self._lock:
             return self._context.set_max_stack_size(limit)
 
+    def set_promise_rejection_tracker(self, tracker):
+        with self._lock:
+            return self._context.set_promise_rejection_tracker(tracker)
+
     def memory(self):
         with self._lock:
             return self._context.memory()
