@@ -13,6 +13,7 @@ def test():
 Context = _quickjs.Context
 Object = _quickjs.Object
 JSException = _quickjs.JSException
+JSPythonException = _quickjs.JSPythonException
 StackOverflow = _quickjs.StackOverflow
 
 
