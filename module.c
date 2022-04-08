@@ -45,6 +45,13 @@ static PyObject *StackOverflow = NULL;
 //
 // Takes ownership of the JSValue and will deallocate it (refcount reduced by 1).
 static PyObject *quickjs_to_python(ContextData *context_obj, JSValue value);
+// Whether converting item to QuickJS would be possible.
+static int python_to_quickjs_possible(ContextData *context, PyObject *item);
+// Converts item to QuickJS.
+//
+// If the Python object is not possible to convert to JS, undefined will be returned. This fallback
+// will not be used if python_to_quickjs_possible returns 1.
+static JSValueConst python_to_quickjs(ContextData *context, PyObject *item);
 
 // Returns nonzero if we should stop due to a time limit.
 static int js_interrupt_handler(JSRuntime *rt, void *opaque) {
@@ -129,6 +136,42 @@ static void object_dealloc(ObjectData *self) {
 	PyObject_GC_Del(self);
 }
 
+// _quickjs.Object.get
+//
+// Gets a Javascript property of the object.
+static PyObject *object_get(ObjectData *self, PyObject *args) {
+	const char *name;
+	if (!PyArg_ParseTuple(args, "s", &name)) {
+		return NULL;
+	}
+	JSValue value = JS_GetPropertyStr(self->context->context, self->object, name);
+	return quickjs_to_python(self->context, value);
+}
+
+// _quickjs.Object.set
+//
+// Sets a Javascript property to the object.
+static PyObject *object_set(ObjectData *self, PyObject *args) {
+	const char *name;
+	PyObject *item;
+	if (!PyArg_ParseTuple(args, "sO", &name, &item)) {
+		return NULL;
+	}
+	int ret = 0;
+	if (python_to_quickjs_possible(self->context, item)) {
+		ret = JS_SetPropertyStr(self->context->context, self->object, name,
+		                        python_to_quickjs(self->context, item));
+		if (ret != 1) {
+			PyErr_SetString(PyExc_TypeError, "Failed setting the variable.");
+		}
+	}
+	if (ret == 1) {
+		Py_RETURN_NONE;
+	} else {
+		return NULL;
+	}
+}
+
 // _quickjs.Object.__call__
 static PyObject *object_call(ObjectData *self, PyObject *args, PyObject *kwds);
 
@@ -143,6 +186,8 @@ static PyObject *object_json(ObjectData *self) {
 
 // All methods of the _quickjs.Object class.
 static PyMethodDef object_methods[] = {
+    {"get", (PyCFunction)object_get, METH_VARARGS, "Gets a Javascript property of the object."},
+    {"set", (PyCFunction)object_set, METH_VARARGS, "Sets a Javascript property to the object."},
     {"json", (PyCFunction)object_json, METH_NOARGS, "Converts to a JSON string."},
     {NULL} /* Sentinel */
 };
