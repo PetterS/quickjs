@@ -45,6 +45,15 @@ static PyObject *StackOverflow = NULL;
 //
 // Takes ownership of the JSValue and will deallocate it (refcount reduced by 1).
 static PyObject *quickjs_to_python(ContextData *context_obj, JSValue value);
+// Whether converting item to QuickJS would be possible.
+static int python_to_quickjs_possible(ContextData *context, PyObject *item);
+// Converts item to QuickJS.
+//
+// If the Python object is not possible to convert to JS, undefined will be returned. This fallback
+// will not be used if python_to_quickjs_possible returns 1.
+static JSValueConst python_to_quickjs(ContextData *context, PyObject *item);
+
+static PyTypeObject Object;
 
 // Returns nonzero if we should stop due to a time limit.
 static int js_interrupt_handler(JSRuntime *rt, void *opaque) {
@@ -129,6 +138,128 @@ static void object_dealloc(ObjectData *self) {
 	PyObject_GC_Del(self);
 }
 
+// _quickjs.Object.get
+//
+// Gets a Javascript property of the object.
+static PyObject *object_get(ObjectData *self, PyObject *args) {
+	const char *name;
+	if (!PyArg_ParseTuple(args, "s", &name)) {
+		return NULL;
+	}
+	JSValue value = JS_GetPropertyStr(self->context->context, self->object, name);
+	return quickjs_to_python(self->context, value);
+}
+
+static JSValue js_c_function(
+    JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic) {
+	ContextData *context = (ContextData *)JS_GetContextOpaque(ctx);
+	if (context->has_time_limit) {
+		return JS_ThrowInternalError(ctx, "Can not call into Python with a time limit set.");
+	}
+	PythonCallableNode *node = context->python_callables;
+	while (node && node->magic != magic) {
+		node = node->next;
+	}
+	if (!node) {
+		return JS_ThrowInternalError(ctx, "Internal error.");
+	}
+	prepare_call_python(context);
+
+	PyObject *args = PyTuple_New(argc);
+	if (!args) {
+		end_call_python(context);
+		return JS_ThrowOutOfMemory(ctx);
+	}
+	int tuple_success = 1;
+	for (int i = 0; i < argc; ++i) {
+		PyObject *arg = quickjs_to_python(context, JS_DupValue(ctx, argv[i]));
+		if (!arg) {
+			tuple_success = 0;
+			break;
+		}
+		PyTuple_SET_ITEM(args, i, arg);
+	}
+	if (!tuple_success) {
+		Py_DECREF(args);
+		end_call_python(context);
+		return JS_ThrowInternalError(ctx, "Internal error: could not convert args.");
+	}
+
+	PyObject *result = PyObject_CallObject(node->obj, args);
+	Py_DECREF(args);
+	if (!result) {
+		end_call_python(context);
+		return JS_ThrowInternalError(ctx, "Python call failed.");
+	}
+	JSValue js_result = JS_NULL;
+	if (python_to_quickjs_possible(context, result)) {
+		js_result = python_to_quickjs(context, result);
+	} else {
+		PyErr_Clear();
+		js_result = JS_ThrowInternalError(ctx, "Can not convert Python result to JS.");
+	}
+	Py_DECREF(result);
+
+	end_call_python(context);
+	return js_result;
+}
+
+// _quickjs.Object.set
+//
+// Sets a Javascript property to the object. Callables are supported.
+static PyObject *object_set(ObjectData *self, PyObject *args) {
+	const char *name;
+	PyObject *item;
+	if (!PyArg_ParseTuple(args, "sO", &name, &item)) {
+		return NULL;
+	}
+	int ret = 0;
+	if (PyCallable_Check(item) && (!PyObject_IsInstance(item, (PyObject *)&Object) || JS_IsFunction(
+		self->context->context, ((ObjectData *)item)->object))) {
+		PythonCallableNode *node = PyMem_Malloc(sizeof(PythonCallableNode));
+		if (!node) {
+			return NULL;
+		}
+		Py_INCREF(item);
+		node->magic = 0;
+		if (self->context->python_callables) {
+			node->magic = self->context->python_callables->magic + 1;
+		}
+		node->obj = item;
+		node->next = self->context->python_callables;
+		self->context->python_callables = node;
+
+		JSValue function = JS_NewCFunctionMagic(
+			self->context->context,
+			js_c_function,
+			name,
+			0,  // TODO: Should we allow setting the .length of the function to something other than 0?
+			JS_CFUNC_generic_magic,
+			node->magic);
+		// If this fails we don't notify the caller of this function.
+		ret = JS_SetPropertyStr(self->context->context, self->object, name, function);
+		if (ret != 1) {
+			PyErr_SetString(PyExc_TypeError, "Failed setting the variable as a callable.");
+			return NULL;
+		} else {
+			Py_RETURN_NONE;
+		}
+	} else {
+		if (python_to_quickjs_possible(self->context, item)) {
+			ret = JS_SetPropertyStr(self->context->context, self->object, name,
+			                        python_to_quickjs(self->context, item));
+			if (ret != 1) {
+				PyErr_SetString(PyExc_TypeError, "Failed setting the variable.");
+			}
+		}
+		if (ret == 1) {
+			Py_RETURN_NONE;
+		} else {
+			return NULL;
+		}
+	}
+}
+
 // _quickjs.Object.__call__
 static PyObject *object_call(ObjectData *self, PyObject *args, PyObject *kwds);
 
@@ -143,6 +274,8 @@ static PyObject *object_json(ObjectData *self) {
 
 // All methods of the _quickjs.Object class.
 static PyMethodDef object_methods[] = {
+    {"get", (PyCFunction)object_get, METH_VARARGS, "Gets a Javascript property of the object."},
+    {"set", (PyCFunction)object_set, METH_VARARGS, "Sets a Javascript property to the object."},
     {"json", (PyCFunction)object_json, METH_NOARGS, "Converts to a JSON string."},
     {NULL} /* Sentinel */
 };
@@ -461,43 +594,47 @@ static PyObject *context_parse_json(ContextData *self, PyObject *args) {
 	return quickjs_to_python(self, value);
 }
 
+// _quickjs.Context.get_global
+//
+// Retrieves the global object of the JS context.
+static PyObject *context_get_global(ContextData *self) {
+	return quickjs_to_python(self, JS_GetGlobalObject(self->context));
+}
+
 // _quickjs.Context.get
 //
 // Retrieves a global variable from the JS context.
 static PyObject *context_get(ContextData *self, PyObject *args) {
-	const char *name;
-	if (!PyArg_ParseTuple(args, "s", &name)) {
+	int err = PyErr_WarnEx(PyExc_DeprecationWarning,
+	                       "Context.get is deprecated, use Context.get_global().get instead.", 1);
+	if (err == -1) {
 		return NULL;
 	}
-	JSValue global = JS_GetGlobalObject(self->context);
-	JSValue value = JS_GetPropertyStr(self->context, global, name);
-	JS_FreeValue(self->context, global);
-	return quickjs_to_python(self, value);
+	PyObject *global = context_get_global(self);
+	if (global == NULL) {
+		return NULL;
+	}
+	PyObject *ret = object_get((ObjectData *)global, args);
+	Py_DECREF(global);
+	return ret;
 }
 
 // _quickjs.Context.set
 //
 // Sets a global variable to the JS context.
 static PyObject *context_set(ContextData *self, PyObject *args) {
-	const char *name;
-	PyObject *item;
-	if (!PyArg_ParseTuple(args, "sO", &name, &item)) {
+	int err = PyErr_WarnEx(PyExc_DeprecationWarning,
+	                       "Context.set is deprecated, use Context.get_global().set instead.", 1);
+	if (err == -1) {
 		return NULL;
 	}
-	JSValue global = JS_GetGlobalObject(self->context);
-	int ret = 0;
-	if (python_to_quickjs_possible(self, item)) {
-		ret = JS_SetPropertyStr(self->context, global, name, python_to_quickjs(self, item));
-		if (ret != 1) {
-			PyErr_SetString(PyExc_TypeError, "Failed setting the variable.");
-		}
-	}
-	JS_FreeValue(self->context, global);
-	if (ret == 1) {
-		Py_RETURN_NONE;
-	} else {
+	PyObject *global = context_get_global(self);
+	if (global == NULL) {
 		return NULL;
 	}
+	PyObject *ret = object_set((ObjectData *)global, args);
+	Py_DECREF(global);
+	return ret;
 }
 
 // _quickjs.Context.set_memory_limit
@@ -596,101 +733,19 @@ static PyObject *context_gc(ContextData *self) {
 	Py_RETURN_NONE;
 }
 
-static JSValue js_c_function(
-    JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic) {
-	ContextData *context = (ContextData *)JS_GetContextOpaque(ctx);
-	if (context->has_time_limit) {
-		return JS_ThrowInternalError(ctx, "Can not call into Python with a time limit set.");
-	}
-	PythonCallableNode *node = context->python_callables;
-	while (node && node->magic != magic) {
-		node = node->next;
-	}
-	if (!node) {
-		return JS_ThrowInternalError(ctx, "Internal error.");
-	}
-	prepare_call_python(context);
-
-	PyObject *args = PyTuple_New(argc);
-	if (!args) {
-		end_call_python(context);
-		return JS_ThrowOutOfMemory(ctx);
-	}
-	int tuple_success = 1;
-	for (int i = 0; i < argc; ++i) {
-		PyObject *arg = quickjs_to_python(context, JS_DupValue(ctx, argv[i]));
-		if (!arg) {
-			tuple_success = 0;
-			break;
-		}
-		PyTuple_SET_ITEM(args, i, arg);
-	}
-	if (!tuple_success) {
-		Py_DECREF(args);
-		end_call_python(context);
-		return JS_ThrowInternalError(ctx, "Internal error: could not convert args.");
-	}
-
-	PyObject *result = PyObject_CallObject(node->obj, args);
-	Py_DECREF(args);
-	if (!result) {
-		end_call_python(context);
-		return JS_ThrowInternalError(ctx, "Python call failed.");
-	}
-	JSValue js_result = JS_NULL;
-	if (python_to_quickjs_possible(context, result)) {
-		js_result = python_to_quickjs(context, result);
-	} else {
-		PyErr_Clear();
-		js_result = JS_ThrowInternalError(ctx, "Can not convert Python result to JS.");
-	}
-	Py_DECREF(result);
-
-	end_call_python(context);
-	return js_result;
-}
-
 static PyObject *context_add_callable(ContextData *self, PyObject *args) {
-	const char *name;
-	PyObject *callable;
-	if (!PyArg_ParseTuple(args, "sO", &name, &callable)) {
+	int err = PyErr_WarnEx(PyExc_DeprecationWarning,
+	                       "Context.add_callable is deprecated, use Context.get_global().set instead.", 1);
+	if (err == -1) {
 		return NULL;
 	}
-	if (!PyCallable_Check(callable)) {
-		PyErr_SetString(PyExc_TypeError, "Argument must be callable.");
+	PyObject *global = context_get_global(self);
+	if (global == NULL) {
 		return NULL;
 	}
-
-	PythonCallableNode *node = PyMem_Malloc(sizeof(PythonCallableNode));
-	if (!node) {
-		return NULL;
-	}
-	Py_INCREF(callable);
-	node->magic = 0;
-	if (self->python_callables) {
-		node->magic = self->python_callables->magic + 1;
-	}
-	node->obj = callable;
-	node->next = self->python_callables;
-	self->python_callables = node;
-
-	JSValue function = JS_NewCFunctionMagic(
-	    self->context,
-	    js_c_function,
-	    name,
-	    0,  // TODO: Should we allow setting the .length of the function to something other than 0?
-	    JS_CFUNC_generic_magic,
-	    node->magic);
-	JSValue global = JS_GetGlobalObject(self->context);
-	// If this fails we don't notify the caller of this function.
-	int ret = JS_SetPropertyStr(self->context, global, name, function);
-	JS_FreeValue(self->context, global);
-	if (ret != 1) {
-		PyErr_SetString(PyExc_TypeError, "Failed adding the callable.");
-		return NULL;
-	} else {
-		Py_RETURN_NONE;
-	}
+	PyObject *ret = object_set((ObjectData *)global, args);
+	Py_DECREF(global);
+	return ret;
 }
 
 // All methods of the _quickjs.Context class.
@@ -702,6 +757,7 @@ static PyMethodDef context_methods[] = {
      "Evaluates a Javascript string as a module."},
     {"execute_pending_job", (PyCFunction)context_execute_pending_job, METH_NOARGS, "Executes a pending job."},
     {"parse_json", (PyCFunction)context_parse_json, METH_VARARGS, "Parses a JSON string."},
+    {"get_global", (PyCFunction)context_get_global, METH_NOARGS, "Gets the Javascript global object."},
     {"get", (PyCFunction)context_get, METH_VARARGS, "Gets a Javascript global variable."},
     {"set", (PyCFunction)context_set, METH_VARARGS, "Sets a Javascript global variable."},
     {"set_memory_limit",

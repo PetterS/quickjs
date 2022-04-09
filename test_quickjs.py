@@ -346,6 +346,25 @@ class Object(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Can not mix JS objects from different contexts."):
             f(d)
 
+    def test_get(self):
+        self.context.eval("a = {x: 42, y: 'foo'};")
+        a = self.context.get_global().get("a")
+        self.assertEqual(a.get("x"), 42)
+        self.assertEqual(a.get("y"), "foo")
+        self.assertEqual(a.get("z"), None)
+
+    def test_set(self):
+        self.context.eval("a = {x: 'overridden'}")
+        a = self.context.get_global().get("a")
+        a.set("x", 42)
+        a.set("y", "foo")
+        self.assertTrue(self.context.eval("a.x == 42"))
+        self.assertTrue(self.context.eval("a.y == 'foo'"))
+
+    def test_make_function(self):
+        self.context.get_global().set("f", lambda x: x + 2)
+        self.assertEqual(self.context.eval("f(40)"), 42)
+
 
 class FunctionTest(unittest.TestCase):
     def test_adder(self):
