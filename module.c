@@ -605,8 +605,11 @@ static PyObject *context_get_global(ContextData *self) {
 //
 // Retrieves a global variable from the JS context.
 static PyObject *context_get(ContextData *self, PyObject *args) {
-	PyErr_WarnEx(PyExc_DeprecationWarning,
-	             "Context.get is deprecated, use Context.get_global().get instead.", 1);
+	int err = PyErr_WarnEx(PyExc_DeprecationWarning,
+	                       "Context.get is deprecated, use Context.get_global().get instead.", 1);
+	if (err == -1) {
+		return NULL;
+	}
 	PyObject *global = context_get_global(self);
 	if (global == NULL) {
 		return NULL;
@@ -620,8 +623,11 @@ static PyObject *context_get(ContextData *self, PyObject *args) {
 //
 // Sets a global variable to the JS context.
 static PyObject *context_set(ContextData *self, PyObject *args) {
-	PyErr_WarnEx(PyExc_DeprecationWarning,
-	             "Context.set is deprecated, use Context.get_global().set instead.", 1);
+	int err = PyErr_WarnEx(PyExc_DeprecationWarning,
+	                       "Context.set is deprecated, use Context.get_global().set instead.", 1);
+	if (err == -1) {
+		return NULL;
+	}
 	PyObject *global = context_get_global(self);
 	if (global == NULL) {
 		return NULL;
@@ -728,8 +734,11 @@ static PyObject *context_gc(ContextData *self) {
 }
 
 static PyObject *context_add_callable(ContextData *self, PyObject *args) {
-	PyErr_WarnEx(PyExc_DeprecationWarning,
-	             "Context.add_callable is deprecated, use Context.get_global().set instead.", 1);
+	int err = PyErr_WarnEx(PyExc_DeprecationWarning,
+	                       "Context.add_callable is deprecated, use Context.get_global().set instead.", 1);
+	if (err == -1) {
+		return NULL;
+	}
 	PyObject *global = context_get_global(self);
 	if (global == NULL) {
 		return NULL;
