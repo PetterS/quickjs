@@ -671,8 +671,7 @@ static PyObject *context_add_callable(ContextData *self, PyObject *args) {
 		self->python_callables = PyMem_Realloc(self->python_callables,
 		                                       sizeof(PyObject *) * self->python_callables_length);
 		if (!self->python_callables) {
-			PyErr_SetString(PyExc_MemoryError, "Failed adding the callable.");
-			return NULL;
+			return PyErr_NoMemory();
 		}
 	}
 	self->python_callables[self->python_callables_count] = callable;
