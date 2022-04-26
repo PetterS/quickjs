@@ -194,6 +194,26 @@ class CallIntoPython(unittest.TestCase):
         with self.assertRaisesRegex(quickjs.JSException, "Python call failed"):
             self.context.eval("error(0)")
 
+    def test_python_function_not_callable(self):
+        with self.assertRaisesRegex(TypeError, "Argument must be callable."):
+            self.context.add_callable("not_callable", 1)
+
+    def test_python_function_slots(self):
+        for i in range(2**16 - 1):
+            self.context.add_callable(f"a{i}", lambda: None)
+        with self.assertRaisesRegex(RuntimeError, "Callables slots exhausted."):
+            self.context.add_callable("b", lambda: None)
+
+    def test_python_function_unwritable(self):
+        self.context.eval("""
+            Object.defineProperty(globalThis, "obj", {
+                value: "test",
+                writable: false,
+            });
+        """)
+        with self.assertRaisesRegex(TypeError, "Failed adding the callable."):
+            self.context.add_callable("obj", lambda: None)
+
     def test_make_function_two_args(self):
         def concat(a, b):
             return a + b

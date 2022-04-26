@@ -27,8 +27,11 @@ typedef struct {
 	// Used when releasing the GIL.
 	PyThreadState *thread_state;
 	InterruptData interrupt_data;
-	// NULL-terminated singly linked list of callable Python objects that we need to keep alive.
-	PythonCallableNode *python_callables;
+	// Dynamical array of callable Python objects that we need to keep alive,
+	// indexed by their "magic" (QuickJS terminology).
+	PyObject **python_callables;
+	uint16_t python_callables_length;
+	uint16_t python_callables_count;
 } ContextData;
 
 // The data of the type _quickjs.Object.
@@ -342,12 +345,21 @@ static PyObject *test(PyObject *self, PyObject *args) {
 // Global state of the module. Currently none.
 struct module_state {};
 
+// Deallocates the python_callables array. Idempotent.
+static void context_dealloc_python_callables(ContextData *self) {
+	for (int i = 0; i < self->python_callables_count; ++i) {
+		Py_DECREF(self->python_callables[i]);
+	}
+	PyMem_Free(self->python_callables);
+	self->python_callables = NULL;
+	self->python_callables_length = 0;
+	self->python_callables_count = 0;
+}
+
 // GC traversal.
 static int context_traverse(ContextData *self, visitproc visit, void *arg) {
-	PythonCallableNode *node = self->python_callables;
-	while (node) {
-		Py_VISIT(node->obj);
-		node = node->next;
+	for (int i = 0; i < self->python_callables_count; ++i) {
+		Py_VISIT(self->python_callables[i]);
 	}
 	return 0;
 }
@@ -355,11 +367,7 @@ static int context_traverse(ContextData *self, visitproc visit, void *arg) {
 // GC clearing. Object does not have a clearing method, therefore dependency cycles
 // between Context and Object will always be cleared starting here.
 static int context_clear(ContextData *self) {
-	PythonCallableNode *node = self->python_callables;
-	while (node) {
-		Py_CLEAR(node->obj);
-		node = node->next;
-	}
+	context_dealloc_python_callables(self);
 	return 0;
 }
 
@@ -375,6 +383,8 @@ static PyObject *context_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 		self->time_limit = 0;
 		self->thread_state = NULL;
 		self->python_callables = NULL;
+		self->python_callables_length = 0;
+		self->python_callables_count = 0;
 		JS_SetContextOpaque(self->context, self);
 		PyObject_GC_Track(self);
 	}
@@ -386,15 +396,7 @@ static void context_dealloc(ContextData *self) {
 	JS_FreeContext(self->context);
 	JS_FreeRuntime(self->runtime);
 	PyObject_GC_UnTrack(self);
-	PythonCallableNode *node = self->python_callables;
-	self->python_callables = NULL;
-	while (node) {
-		PythonCallableNode *this = node;
-		node = node->next;
-		// this->obj may already be NULL if GC'ed right before through context_clear.
-		Py_XDECREF(this->obj);
-		PyMem_Free(this);
-	}
+	context_dealloc_python_callables(self);
 	PyObject_GC_Del(self);
 }
 
@@ -602,13 +604,6 @@ static JSValue js_c_function(
 	if (context->has_time_limit) {
 		return JS_ThrowInternalError(ctx, "Can not call into Python with a time limit set.");
 	}
-	PythonCallableNode *node = context->python_callables;
-	while (node && node->magic != magic) {
-		node = node->next;
-	}
-	if (!node) {
-		return JS_ThrowInternalError(ctx, "Internal error.");
-	}
 	prepare_call_python(context);
 
 	PyObject *args = PyTuple_New(argc);
@@ -631,7 +626,7 @@ static JSValue js_c_function(
 		return JS_ThrowInternalError(ctx, "Internal error: could not convert args.");
 	}
 
-	PyObject *result = PyObject_CallObject(node->obj, args);
+	PyObject *result = PyObject_CallObject(context->python_callables[(uint16_t)magic], args);
 	Py_DECREF(args);
 	if (!result) {
 		end_call_python(context);
@@ -661,18 +656,26 @@ static PyObject *context_add_callable(ContextData *self, PyObject *args) {
 		return NULL;
 	}
 
-	PythonCallableNode *node = PyMem_Malloc(sizeof(PythonCallableNode));
-	if (!node) {
+	// In QuickJS, dynamic C function calls are realized with an arbitrary "magic". While the
+	// API exposes it as an int, it is internally stored as an int16_t (this may be considered to
+	// be a bug, see https://www.freelists.org/post/quickjs-devel/int-magic).
+	// For us, this magic is the index of the target Python callable in self->python_callables.
+	// To allow for (close to) as many callables as possible, we cast the index from
+	// uint16_t to int16_t when passing it here into QuickJS, then in js_c_function we cast it back.
+	if (self->python_callables_count == UINT16_MAX) {
+		PyErr_SetString(PyExc_RuntimeError, "Callables slots exhausted.");
 		return NULL;
 	}
-	Py_INCREF(callable);
-	node->magic = 0;
-	if (self->python_callables) {
-		node->magic = self->python_callables->magic + 1;
+	if (self->python_callables_count >= self->python_callables_length) {
+		self->python_callables_length = (self->python_callables_length << 1) + 1;
+		self->python_callables = PyMem_Realloc(self->python_callables,
+		                                       sizeof(PyObject *) * self->python_callables_length);
+		if (!self->python_callables) {
+			PyErr_SetString(PyExc_MemoryError, "Failed adding the callable.");
+			return NULL;
+		}
 	}
-	node->obj = callable;
-	node->next = self->python_callables;
-	self->python_callables = node;
+	self->python_callables[self->python_callables_count] = callable;
 
 	JSValue function = JS_NewCFunctionMagic(
 	    self->context,
@@ -680,8 +683,17 @@ static PyObject *context_add_callable(ContextData *self, PyObject *args) {
 	    name,
 	    0,  // TODO: Should we allow setting the .length of the function to something other than 0?
 	    JS_CFUNC_generic_magic,
-	    node->magic);
+	    (int16_t)self->python_callables_count);
+	if (JS_IsException(function)) {
+		quickjs_exception_to_python(self->context);
+		return NULL;
+	}
 	JSValue global = JS_GetGlobalObject(self->context);
+	if (JS_IsException(global)) {
+		JS_FreeValue(self->context, function);
+		quickjs_exception_to_python(self->context);
+		return NULL;
+	}
 	// If this fails we don't notify the caller of this function.
 	int ret = JS_SetPropertyStr(self->context, global, name, function);
 	JS_FreeValue(self->context, global);
@@ -689,6 +701,8 @@ static PyObject *context_add_callable(ContextData *self, PyObject *args) {
 		PyErr_SetString(PyExc_TypeError, "Failed adding the callable.");
 		return NULL;
 	} else {
+		Py_INCREF(callable);
+		++self->python_callables_count;
 		Py_RETURN_NONE;
 	}
 }
