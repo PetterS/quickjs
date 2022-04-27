@@ -41,8 +41,67 @@ typedef struct {
 	JSValue object;
 } ObjectData;
 
+static JSClassID js_internal_python_error_class_id;
+
+typedef struct {
+	PyObject *error;
+	ContextData *context;
+} JSInternalPythonErrorData;
+
+static void js_internal_python_error_finalizer(JSRuntime *rt, JSValue value)
+{
+	JSInternalPythonErrorData *d = JS_GetOpaque(value, js_internal_python_error_class_id);
+	if (d) {
+		// NOTE: This may be called from quickjs_exception_to_python, but also from
+		// e.g. JS_Eval, so we need to ensure that we are in the correct state.
+		if (d->context->thread_state) {
+			PyEval_RestoreThread(d->context->thread_state);
+		}
+		Py_DECREF(d->error);
+		if (d->context->thread_state) {
+			d->context->thread_state = PyEval_SaveThread();
+		}
+		js_free(d->context->context, d);
+	};
+}
+
+static JSClassDef js_internal_python_error_class = {
+    "InternalPythonError",
+    .finalizer = js_internal_python_error_finalizer,
+};
+
+static JSValue js_internal_python_error_ctor(JSContext *ctx, JSValueConst new_target,
+                                             int argc, JSValueConst *argv)
+{
+	JSValue proto;
+	if (JS_IsUndefined(new_target)) {
+		proto = JS_GetClassProto(ctx, js_internal_python_error_class_id);
+	} else {
+		proto = JS_GetPropertyStr(ctx, new_target, "prototype");
+	}
+	if (JS_IsException(proto)) {
+		return proto;
+	}
+	JSValue obj = JS_NewObjectProtoClass(ctx, proto, js_internal_python_error_class_id);
+	JS_FreeValue(ctx, proto);
+	if (JS_IsException(obj)) {
+		return obj;
+	}
+	if (!JS_IsUndefined(argv[0])) {
+		JSValue msg = JS_ToString(ctx, argv[0]);
+		if (JS_IsException(msg)) {
+			JS_FreeValue(ctx, obj);
+			return msg;
+		}
+		JS_DefinePropertyValueStr(ctx, obj, "message", msg,
+		                          JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
+	}
+	return obj;
+}
+
 // The exception raised by this module.
 static PyObject *JSException = NULL;
+static PyObject *JSPythonException = NULL;
 static PyObject *StackOverflow = NULL;
 // Converts a JSValue to a Python object.
 //
@@ -256,7 +315,8 @@ static PyObject *object_call(ObjectData *self, PyObject *args, PyObject *kwds) {
 	return quickjs_to_python(self->context, value);
 }
 
-// Converts the current Javascript exception to a Python exception via a C string.
+// Converts the current Javascript exception to a Python exception via a C string
+// or via the internal Python exception if it exists.
 static void quickjs_exception_to_python(JSContext *context) {
 	JSValue exception = JS_GetException(context);
 	const char *cstring = JS_ToCString(context, exception);
@@ -270,7 +330,19 @@ static void quickjs_exception_to_python(JSContext *context) {
 	}
 	if (cstring != NULL) {
 		const char *safe_stack_cstring = stack_cstring ? stack_cstring : "";
-		if (strstr(cstring, "stack overflow") != NULL) {
+		JSInternalPythonErrorData *error_data = JS_GetOpaque(exception,
+		                                                     js_internal_python_error_class_id);
+		if (error_data) {
+			PyErr_Format(JSPythonException, "%s\n%s", cstring, safe_stack_cstring);
+			PyObject *type;
+			PyObject *value;
+			PyObject *traceback;
+			PyErr_Fetch(&type, &value, &traceback);
+			PyErr_NormalizeException(&type, &value, &traceback);
+			Py_INCREF(error_data->error);
+			PyException_SetCause(value, error_data->error);
+			PyErr_Restore(type, value, traceback);
+		} else if (strstr(cstring, "stack overflow") != NULL) {
 			PyErr_Format(StackOverflow, "%s\n%s", cstring, safe_stack_cstring);
 		} else {
 			PyErr_Format(JSException, "%s\n%s", cstring, safe_stack_cstring);
@@ -379,6 +451,23 @@ static PyObject *context_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 		// _quickjs.Context can be used concurrently.
 		self->runtime = JS_NewRuntime();
 		self->context = JS_NewContext(self->runtime);
+		JS_NewClass(self->runtime, js_internal_python_error_class_id,
+		            &js_internal_python_error_class);
+		JSValue global = JS_GetGlobalObject(self->context);
+		JSValue ie_cls = JS_GetPropertyStr(self->context, global, "InternalError");
+		JSValue ie_proto = JS_GetPropertyStr(self->context, ie_cls, "prototype");
+		JS_FreeValue(self->context, ie_cls);
+		JSValue proto = JS_NewObjectProto(self->context, ie_proto);
+		JS_FreeValue(self->context, ie_proto);
+		JS_SetClassProto(self->context, js_internal_python_error_class_id, proto);
+		JSValue ctor = JS_NewCFunction2(self->context, js_internal_python_error_ctor,
+		                                "InternalPythonError", 1, JS_CFUNC_constructor_or_func, 0);
+		JS_SetConstructor(self->context, ctor, proto);
+		JS_FreeValue(self->context, proto);
+		JS_DefinePropertyValueStr(self->context, global, "InternalPythonError", ctor,
+		                          JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
+		JS_FreeValue(self->context, ctor);
+		JS_FreeValue(self->context, global);
 		self->has_time_limit = 0;
 		self->time_limit = 0;
 		self->thread_state = NULL;
@@ -629,8 +718,27 @@ static JSValue js_c_function(
 	PyObject *result = PyObject_CallObject(context->python_callables[(uint16_t)magic], args);
 	Py_DECREF(args);
 	if (!result) {
+		// NOTE: First throw and catch a standard error just to get a proper stack.
+		JS_ThrowInternalError(ctx, "");
+		JSValue error_with_stack = JS_GetException(ctx);
+		JSValue error = JS_NewObjectClass(ctx, js_internal_python_error_class_id);
+		JS_SetPropertyStr(ctx, error, "message", JS_NewString(ctx, "Python call failed"));
+		JS_SetPropertyStr(ctx, error, "stack", JS_GetPropertyStr(ctx, error_with_stack, "stack"));
+		JS_FreeValue(ctx, error_with_stack);
+		PyObject *type;
+		JSInternalPythonErrorData *error_data = js_malloc(ctx, sizeof(JSInternalPythonErrorData));
+		error_data->context = context;
+		PyObject *traceback;
+		PyErr_Fetch(&type, &error_data->error, &traceback);
+		PyErr_NormalizeException(&type, &error_data->error, &traceback);
+		if (traceback) {
+			PyException_SetTraceback(error_data->error, traceback);
+			Py_DECREF(traceback);
+		}
+		Py_DECREF(type);
+		JS_SetOpaque(error, error_data);
 		end_call_python(context);
-		return JS_ThrowInternalError(ctx, "Python call failed.");
+		return JS_Throw(ctx, error);
 	}
 	JSValue js_result = JS_NULL;
 	if (python_to_quickjs_possible(context, result)) {
@@ -776,8 +884,14 @@ PyMODINIT_FUNC PyInit__quickjs(void) {
 		return NULL;
 	}
 
+	JS_NewClassID(&js_internal_python_error_class_id);
+
 	JSException = PyErr_NewException("_quickjs.JSException", NULL, NULL);
 	if (JSException == NULL) {
+		return NULL;
+	}
+	JSPythonException = PyErr_NewException("_quickjs.JSPythonException", JSException, NULL);
+	if (JSPythonException == NULL) {
 		return NULL;
 	}
 	StackOverflow = PyErr_NewException("_quickjs.StackOverflow", JSException, NULL);
@@ -790,6 +904,7 @@ PyMODINIT_FUNC PyInit__quickjs(void) {
 	Py_INCREF(&Object);
 	PyModule_AddObject(module, "Object", (PyObject *)&Object);
 	PyModule_AddObject(module, "JSException", JSException);
+	PyModule_AddObject(module, "JSPythonException", JSPythonException);
 	PyModule_AddObject(module, "StackOverflow", StackOverflow);
 	return module;
 }

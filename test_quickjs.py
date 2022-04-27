@@ -261,7 +261,6 @@ class CallIntoPython(unittest.TestCase):
 
     def test_conversion_failure_does_not_raise_system_error(self):
         # https://github.com/PetterS/quickjs/issues/38
-
         def test_list():
             return [1, 2, 3]
 
@@ -270,6 +269,72 @@ class CallIntoPython(unittest.TestCase):
             # With incorrect error handling, this (safely) made Python raise a SystemError
             # instead of a JS exception.
             self.context.eval("test_list()")
+
+    def test_python_exception_is_exposed(self):
+        # https://github.com/PetterS/quickjs/issues/63
+        def python_raise():
+            1/0
+
+        self.context.add_callable("python_raise", python_raise)
+        with self.assertRaises(quickjs.JSPythonException):
+            self.context.eval("python_raise()")
+        try:
+            self.context.eval("python_raise()")
+        except quickjs.JSPythonException as e:
+            self.assertIsInstance(e.__cause__, ZeroDivisionError)
+
+    def test_python_exception_with_object_return_does_not_raise_system_error(self):
+        # https://github.com/PetterS/quickjs/issues/66
+        def python_raise():
+            raise Exception
+
+        self.context.add_callable("python_raise", python_raise)
+        # When called, `a` should return an object (a promise),
+        # even though a Python error is generated in the background.
+        self.context.eval("async function a() {await python_raise();}")
+        # With incorrect error handling, this raised a SystemError in dev builds,
+        # and segfaulted in prod builds.
+        self.assertEqual(self.context.eval("typeof a();"), "object")
+
+    def test_python_exception_with_nested_call(self):
+        # https://github.com/PetterS/quickjs/pull/67
+        def python_raise():
+            raise Exception
+
+        def python_nested():
+            self.context.eval("python_raise()")
+
+        self.context.add_callable("python_raise", python_raise)
+        self.context.add_callable("python_nested", python_nested)
+        with self.assertRaisesRegex(quickjs.JSPythonException, "Python call failed"):
+            self.context.eval("python_nested()")
+
+    def test_python_exception_instanceof_internalerror(self):
+        def python_raise():
+            raise Exception
+
+        self.context.add_callable("python_raise", python_raise)
+        self.assertTrue(self.context.eval("""
+            (function() {
+                try{
+                    python_raise();
+                }
+                catch (e) {
+                    return e instanceof InternalPythonError
+                    && e instanceof InternalError
+                    && e.message === "Python call failed"
+                }
+            })();
+        """))
+        self.assertTrue(self.context.eval("""
+            (new InternalPythonError) instanceof InternalPythonError
+            && (new InternalPythonError) instanceof InternalError
+            && !((new InternalError) instanceof InternalPythonError)
+            && (new InternalPythonError("x")).message === "x"
+            && InternalPythonError() instanceof InternalPythonError
+            && InternalPythonError() instanceof InternalError
+            && InternalPythonError("x").message === "x";
+        """))
 
 
 class Object(unittest.TestCase):
