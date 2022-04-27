@@ -3,15 +3,6 @@
 
 #include "third-party/quickjs.h"
 
-// Node of Python callable that the context needs to keep available.
-typedef struct PythonCallableNode PythonCallableNode;
-struct PythonCallableNode {
-	PyObject *obj;
-	// Internal ID of the callable function. "magic" is QuickJS terminology.
-	int magic;
-	PythonCallableNode *next;
-};
-
 // Keeps track of the time if we are using a time limit.
 typedef struct {
 	clock_t start;
