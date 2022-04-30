@@ -1,4 +1,5 @@
 import concurrent.futures
+import gc
 import json
 import unittest
 
@@ -166,6 +167,7 @@ class CallIntoPython(unittest.TestCase):
     def test_make_function(self):
         self.context.add_callable("f", lambda x: x + 2)
         self.assertEqual(self.context.eval("f(40)"), 42)
+        self.assertEqual(self.context.eval("f.name"), "f")
 
     def test_make_two_functions(self):
         for i in range(10):
@@ -198,11 +200,22 @@ class CallIntoPython(unittest.TestCase):
         with self.assertRaisesRegex(TypeError, "Argument must be callable."):
             self.context.add_callable("not_callable", 1)
 
-    def test_python_function_slots(self):
-        for i in range(2**16 - 1):
-            self.context.add_callable(f"a{i}", lambda: None)
-        with self.assertRaisesRegex(RuntimeError, "Callables slots exhausted."):
-            self.context.add_callable("b", lambda: None)
+    def test_python_function_no_slots(self):
+        for i in range(2**16):
+            self.context.add_callable(f"a{i}", lambda i=i: i + 1)
+        self.assertEqual(self.context.eval("a0()"), 1)
+        self.assertEqual(self.context.eval(f"a{2**16 - 1}()"), 2**16)
+
+    def test_function_after_context_del(self):
+        def make():
+            ctx = quickjs.Context()
+            ctx.add_callable("f", lambda: 1)
+            f = ctx.get("f")
+            del ctx
+            return f
+        gc.collect()
+        f = make()
+        self.assertEqual(f(), 1)
 
     def test_python_function_unwritable(self):
         self.context.eval("""
@@ -213,6 +226,11 @@ class CallIntoPython(unittest.TestCase):
         """)
         with self.assertRaisesRegex(TypeError, "Failed adding the callable."):
             self.context.add_callable("obj", lambda: None)
+
+    def test_python_function_is_function(self):
+        self.context.add_callable("f", lambda: None)
+        self.assertTrue(self.context.eval("f instanceof Function"))
+        self.assertTrue(self.context.eval("typeof f === 'function'"))
 
     def test_make_function_two_args(self):
         def concat(a, b):
@@ -244,6 +262,13 @@ class CallIntoPython(unittest.TestCase):
         inner = self.context.eval("(function() { return 42; })")
         self.context.add_callable("f", lambda: inner())
         self.assertEqual(self.context.eval("f()"), 42)
+
+    def test_delete_function_from_inside_js(self):
+        self.context.add_callable("f", lambda: None)
+        # Segfaults if js_python_function_finalizer does not handle threading
+        # states carefully.
+        self.context.eval("delete f")
+        self.assertIsNone(self.context.get("f"))
 
     def test_invalid_argument(self):
         self.context.add_callable("p", lambda: 42)
