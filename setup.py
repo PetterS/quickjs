@@ -4,7 +4,7 @@ from typing import List
 
 from setuptools import setup, Extension
 
-CONFIG_VERSION = '2020-11-08'
+CONFIG_VERSION = open("third-party/VERSION").read().strip()
 extra_link_args: List[str] = []
 
 if sys.platform == "win32":
