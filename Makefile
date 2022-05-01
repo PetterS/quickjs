@@ -5,7 +5,7 @@ test: install
 install: build
 	poetry run python setup.py develop
 
-build: Makefile module.c third-party/quickjs.c third-party/quickjs.h
+build: Makefile module.c upstream-quickjs/quickjs.c upstream-quickjs/quickjs.h
 	poetry run python setup.py build
 
 format:

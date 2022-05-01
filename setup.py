@@ -4,7 +4,7 @@ from typing import List
 
 from setuptools import setup, Extension
 
-CONFIG_VERSION = open("third-party/VERSION").read().strip()
+CONFIG_VERSION = open("upstream-quickjs/VERSION").read().strip()
 extra_link_args: List[str] = []
 
 if sys.platform == "win32":
@@ -23,9 +23,27 @@ if sys.platform == "win32":
 
 
 def get_c_sources(include_headers=False):
-    sources = ['module.c'] + glob.glob("third-party/*.c")
+    sources = [
+        "module.c",
+        "upstream-quickjs/cutils.c",
+        "upstream-quickjs/libbf.c",
+        "upstream-quickjs/libregexp.c",
+        "upstream-quickjs/libunicode.c",
+        "upstream-quickjs/quickjs.c",
+    ]
     if include_headers:
-        sources += glob.glob("third-party/*.h")
+        sources += [
+            "upstream-quickjs/cutils.h",
+            "upstream-quickjs/libbf.h",
+            "upstream-quickjs/libregexp-opcode.h",
+            "upstream-quickjs/libregexp.h",
+            "upstream-quickjs/libunicode-table.h",
+            "upstream-quickjs/libunicode.h",
+            "upstream-quickjs/list.h",
+            "upstream-quickjs/quickjs-atom.h",
+            "upstream-quickjs/quickjs-opcode.h",
+            "upstream-quickjs/quickjs.h",
+        ]
     return sources
 
 

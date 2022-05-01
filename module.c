@@ -1,7 +1,7 @@
 #include <Python.h>
 #include <time.h>
 
-#include "third-party/quickjs.h"
+#include "upstream-quickjs/quickjs.h"
 
 // Node of Python callable that the context needs to keep available.
 typedef struct PythonCallableNode PythonCallableNode;
