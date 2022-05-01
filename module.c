@@ -43,6 +43,8 @@ typedef struct {
 // The exception raised by this module.
 static PyObject *JSException = NULL;
 static PyObject *StackOverflow = NULL;
+// Converts the current Javascript exception to a Python exception via a C string.
+static void quickjs_exception_to_python(JSContext *context);
 // Converts a JSValue to a Python object.
 //
 // Takes ownership of the JSValue and will deallocate it (refcount reduced by 1).
@@ -238,7 +240,14 @@ static PyObject *object_call(ObjectData *self, PyObject *args, PyObject *kwds) {
 	}
 
 	// Now we know that all arguments are supported and we can convert them.
-	JSValueConst *jsargs = malloc(nargs * sizeof(JSValueConst));
+	JSValueConst *jsargs;
+	if (nargs) {
+		jsargs = js_malloc(self->runtime_data->context, nargs * sizeof(JSValueConst));
+		if (jsargs == NULL) {
+			quickjs_exception_to_python(self->runtime_data->context);
+			return NULL;
+		}
+	}
 	for (int i = 0; i < nargs; ++i) {
 		PyObject *item = PyTuple_GetItem(args, i);
 		jsargs[i] = python_to_quickjs(self->runtime_data, item);
@@ -250,7 +259,9 @@ static PyObject *object_call(ObjectData *self, PyObject *args, PyObject *kwds) {
 	for (int i = 0; i < nargs; ++i) {
 		JS_FreeValue(self->runtime_data->context, jsargs[i]);
 	}
-	free(jsargs);
+	if (nargs) {
+		js_free(self->runtime_data->context, jsargs);
+	}
 	end_call_js(self->runtime_data);
 	return quickjs_to_python(self->runtime_data, value);
 }
