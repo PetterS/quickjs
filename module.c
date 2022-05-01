@@ -3,6 +3,14 @@
 
 #include "third-party/quickjs.h"
 
+// Node of Python callable that the context needs to keep available.
+typedef struct PythonCallableNode PythonCallableNode;
+struct PythonCallableNode {
+	PyObject *obj;
+	PythonCallableNode *prev;
+	PythonCallableNode *next;
+};
+
 // Keeps track of the time if we are using a time limit.
 typedef struct {
 	clock_t start;
@@ -18,11 +26,11 @@ typedef struct {
 	// Used when releasing the GIL.
 	PyThreadState *thread_state;
 	InterruptData interrupt_data;
-	// Dynamical array of callable Python objects that we need to keep alive,
-	// indexed by their "magic" (QuickJS terminology).
-	PyObject **python_callables;
-	uint16_t python_callables_length;
-	uint16_t python_callables_count;
+	// NULL-terminated doubly linked list of callable Python objects that we need to keep track of.
+	// We need to store references to callables in a place where we can access them when running
+	// Python's GC. Having them stored only in QuickJS' function opaques would create a dependency
+	// cycle accross Python and QuickJS that neither GC can notice.
+	PythonCallableNode *python_callables;
 } RuntimeData;
 
 // The data of the type _quickjs.Object.
@@ -118,7 +126,7 @@ static void object_dealloc(ObjectData *self) {
 		JS_FreeValue(self->runtime_data->context, self->object);
 		// We incremented the refcount of the runtime data when we created this object, so we should
 		// decrease it now so we don't leak memory.
-		Py_DECREF(self->runtime_data);
+		Py_CLEAR(self->runtime_data);
 	}
 	PyObject_GC_Del(self);
 }
@@ -336,21 +344,12 @@ static PyObject *test(PyObject *self, PyObject *args) {
 // Global state of the module. Currently none.
 struct module_state {};
 
-// Deallocates the python_callables array. Idempotent.
-static void runtime_dealloc_python_callables(RuntimeData *self) {
-	for (int i = 0; i < self->python_callables_count; ++i) {
-		Py_DECREF(self->python_callables[i]);
-	}
-	PyMem_Free(self->python_callables);
-	self->python_callables = NULL;
-	self->python_callables_length = 0;
-	self->python_callables_count = 0;
-}
-
 // GC traversal.
 static int runtime_traverse(RuntimeData *self, visitproc visit, void *arg) {
-	for (int i = 0; i < self->python_callables_count; ++i) {
-		Py_VISIT(self->python_callables[i]);
+	PythonCallableNode *node = self->python_callables;
+	while (node) {
+		Py_VISIT(node->obj);
+		node = node->next;
 	}
 	return 0;
 }
@@ -358,9 +357,99 @@ static int runtime_traverse(RuntimeData *self, visitproc visit, void *arg) {
 // GC clearing. Object does not have a clearing method, therefore dependency cycles
 // between Context and Object will always be cleared starting here.
 static int runtime_clear(RuntimeData *self) {
-	runtime_dealloc_python_callables(self);
+	PythonCallableNode *node = self->python_callables;
+	while (node) {
+		Py_CLEAR(node->obj);
+		node = node->next;
+	}
 	return 0;
 }
+
+static JSClassID js_python_function_class_id;
+
+static void js_python_function_finalizer(JSRuntime *rt, JSValue val) {
+	PythonCallableNode *node = JS_GetOpaque(val, js_python_function_class_id);
+	RuntimeData *runtime_data = JS_GetRuntimeOpaque(rt);
+	if (node) {
+		// fail safe
+		JS_SetOpaque(val, NULL);
+		// NOTE: This may be called from e.g. runtime_dealloc, but also from
+		// e.g. JS_Eval, so we need to ensure that we are in the correct state.
+		// TODO: integrate better with (prepare|end)_call_(python|js).
+		if (runtime_data->thread_state) {
+			PyEval_RestoreThread(runtime_data->thread_state);
+		}
+		if (node->prev) {
+			node->prev->next = node->next;
+		} else {
+			runtime_data->python_callables = node->next;
+		}
+		if (node->next) {
+			node->next->prev = node->prev;
+		}
+		// May have just been cleared in runtime_clear.
+		Py_XDECREF(node->obj);
+		PyMem_Free(node);
+		if (runtime_data->thread_state) {
+			runtime_data->thread_state = PyEval_SaveThread();
+		}
+	};
+}
+
+static JSValue js_python_function_call(JSContext *ctx, JSValueConst func_obj,
+                                       JSValueConst this_val, int argc, JSValueConst *argv,
+                                       int flags) {
+	RuntimeData *runtime_data = (RuntimeData *)JS_GetRuntimeOpaque(JS_GetRuntime(ctx));
+	PythonCallableNode *node = JS_GetOpaque(func_obj, js_python_function_class_id);
+	if (runtime_data->has_time_limit) {
+		return JS_ThrowInternalError(ctx, "Can not call into Python with a time limit set.");
+	}
+	prepare_call_python(runtime_data);
+
+	PyObject *args = PyTuple_New(argc);
+	if (!args) {
+		end_call_python(runtime_data);
+		return JS_ThrowOutOfMemory(ctx);
+	}
+	int tuple_success = 1;
+	for (int i = 0; i < argc; ++i) {
+		PyObject *arg = quickjs_to_python(runtime_data, JS_DupValue(ctx, argv[i]));
+		if (!arg) {
+			tuple_success = 0;
+			break;
+		}
+		PyTuple_SET_ITEM(args, i, arg);
+	}
+	if (!tuple_success) {
+		Py_DECREF(args);
+		end_call_python(runtime_data);
+		return JS_ThrowInternalError(ctx, "Internal error: could not convert args.");
+	}
+
+	PyObject *result = PyObject_CallObject(node->obj, args);
+	Py_DECREF(args);
+	if (!result) {
+		end_call_python(runtime_data);
+		return JS_ThrowInternalError(ctx, "Python call failed.");
+	}
+	JSValue js_result = JS_NULL;
+	if (python_to_quickjs_possible(runtime_data, result)) {
+		js_result = python_to_quickjs(runtime_data, result);
+	} else {
+		PyErr_Clear();
+		js_result = JS_ThrowInternalError(ctx, "Can not convert Python result to JS.");
+	}
+	Py_DECREF(result);
+
+	end_call_python(runtime_data);
+	return js_result;
+}
+
+static JSClassDef js_python_function_class = {
+	"PythonFunction",
+	.finalizer = js_python_function_finalizer,
+	.call = js_python_function_call,
+};
 
 // Creates an instance of the _quickjs.Context class.
 static PyObject *runtime_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
@@ -370,12 +459,18 @@ static PyObject *runtime_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 		// _quickjs.Context can be used concurrently.
 		self->runtime = JS_NewRuntime();
 		self->context = JS_NewContext(self->runtime);
+		JS_NewClass(self->runtime, js_python_function_class_id,
+		            &js_python_function_class);
+		JSValue global = JS_GetGlobalObject(self->context);
+		JSValue fct_cls = JS_GetPropertyStr(self->context, global, "Function");
+		JSValue fct_proto = JS_GetPropertyStr(self->context, fct_cls, "prototype");
+		JS_FreeValue(self->context, fct_cls);
+		JS_SetClassProto(self->context, js_python_function_class_id, fct_proto);
+		JS_FreeValue(self->context, global);
 		self->has_time_limit = 0;
 		self->time_limit = 0;
 		self->thread_state = NULL;
 		self->python_callables = NULL;
-		self->python_callables_length = 0;
-		self->python_callables_count = 0;
 		JS_SetRuntimeOpaque(self->runtime, self);
 		PyObject_GC_Track(self);
 	}
@@ -387,7 +482,6 @@ static void runtime_dealloc(RuntimeData *self) {
 	JS_FreeContext(self->context);
 	JS_FreeRuntime(self->runtime);
 	PyObject_GC_UnTrack(self);
-	runtime_dealloc_python_callables(self);
 	PyObject_GC_Del(self);
 }
 
@@ -589,52 +683,6 @@ static PyObject *runtime_gc(RuntimeData *self) {
 	Py_RETURN_NONE;
 }
 
-static JSValue js_c_function(
-    JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic) {
-	RuntimeData *runtime_data = (RuntimeData *)JS_GetRuntimeOpaque(JS_GetRuntime(ctx));
-	if (runtime_data->has_time_limit) {
-		return JS_ThrowInternalError(ctx, "Can not call into Python with a time limit set.");
-	}
-	prepare_call_python(runtime_data);
-
-	PyObject *args = PyTuple_New(argc);
-	if (!args) {
-		end_call_python(runtime_data);
-		return JS_ThrowOutOfMemory(ctx);
-	}
-	int tuple_success = 1;
-	for (int i = 0; i < argc; ++i) {
-		PyObject *arg = quickjs_to_python(runtime_data, JS_DupValue(ctx, argv[i]));
-		if (!arg) {
-			tuple_success = 0;
-			break;
-		}
-		PyTuple_SET_ITEM(args, i, arg);
-	}
-	if (!tuple_success) {
-		Py_DECREF(args);
-		end_call_python(runtime_data);
-		return JS_ThrowInternalError(ctx, "Internal error: could not convert args.");
-	}
-
-	PyObject *result = PyObject_CallObject(runtime_data->python_callables[(uint16_t)magic], args);
-	Py_DECREF(args);
-	if (!result) {
-		end_call_python(runtime_data);
-		return JS_ThrowInternalError(ctx, "Python call failed.");
-	}
-	JSValue js_result = JS_NULL;
-	if (python_to_quickjs_possible(runtime_data, result)) {
-		js_result = python_to_quickjs(runtime_data, result);
-	} else {
-		PyErr_Clear();
-		js_result = JS_ThrowInternalError(ctx, "Can not convert Python result to JS.");
-	}
-	Py_DECREF(result);
-
-	end_call_python(runtime_data);
-	return js_result;
-}
 
 static PyObject *runtime_add_callable(RuntimeData *self, PyObject *args) {
 	const char *name;
@@ -647,37 +695,28 @@ static PyObject *runtime_add_callable(RuntimeData *self, PyObject *args) {
 		return NULL;
 	}
 
-	// In QuickJS, dynamic C function calls are realized with an arbitrary "magic". While the
-	// API exposes it as an int, it is internally stored as an int16_t (this may be considered to
-	// be a bug, see https://www.freelists.org/post/quickjs-devel/int-magic).
-	// For us, this magic is the index of the target Python callable in self->python_callables.
-	// To allow for (close to) as many callables as possible, we cast the index from
-	// uint16_t to int16_t when passing it here into QuickJS, then in js_c_function we cast it back.
-	if (self->python_callables_count == UINT16_MAX) {
-		PyErr_SetString(PyExc_RuntimeError, "Callables slots exhausted.");
-		return NULL;
-	}
-	if (self->python_callables_count >= self->python_callables_length) {
-		self->python_callables_length = (self->python_callables_length << 1) + 1;
-		self->python_callables = PyMem_Realloc(self->python_callables,
-		                                       sizeof(PyObject *) * self->python_callables_length);
-		if (!self->python_callables) {
-			return PyErr_NoMemory();
-		}
-	}
-	self->python_callables[self->python_callables_count] = callable;
-
-	JSValue function = JS_NewCFunctionMagic(
-	    self->context,
-	    js_c_function,
-	    name,
-	    0,  // TODO: Should we allow setting the .length of the function to something other than 0?
-	    JS_CFUNC_generic_magic,
-	    (int16_t)self->python_callables_count);
+	JSValue function = JS_NewObjectClass(self->context, js_python_function_class_id);
 	if (JS_IsException(function)) {
 		quickjs_exception_to_python(self->context);
 		return NULL;
 	}
+	// TODO: Should we allow setting the .length of the function to something other than 0?
+	JS_DefinePropertyValueStr(self->context, function, "name", JS_NewString(self->context, name), JS_PROP_CONFIGURABLE);
+	PythonCallableNode *node = PyMem_Malloc(sizeof(PythonCallableNode));
+	if (!node) {
+		JS_FreeValue(self->context, function);
+		return NULL;
+	}
+	Py_INCREF(callable);
+	node->obj = callable;
+	node->prev = NULL;
+	node->next = self->python_callables;
+	if (self->python_callables) {
+		self->python_callables->prev = node;
+	}
+	self->python_callables = node;
+	JS_SetOpaque(function, node);
+
 	JSValue global = JS_GetGlobalObject(self->context);
 	if (JS_IsException(global)) {
 		JS_FreeValue(self->context, function);
@@ -691,8 +730,6 @@ static PyObject *runtime_add_callable(RuntimeData *self, PyObject *args) {
 		PyErr_SetString(PyExc_TypeError, "Failed adding the callable.");
 		return NULL;
 	} else {
-		Py_INCREF(callable);
-		++self->python_callables_count;
 		Py_RETURN_NONE;
 	}
 }
@@ -766,6 +803,8 @@ PyMODINIT_FUNC PyInit__quickjs(void) {
 	if (module == NULL) {
 		return NULL;
 	}
+
+	JS_NewClassID(&js_python_function_class_id);
 
 	JSException = PyErr_NewException("_quickjs.JSException", NULL, NULL);
 	if (JSException == NULL) {
