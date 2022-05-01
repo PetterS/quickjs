@@ -9,6 +9,11 @@ jobs:
     steps:
       - checkout
 
+      - run:
+          name: Init git submodules
+          command: |
+            git submodule update --init --recursive
+
       - restore_cache:
           keys:
           - v1-3.8-dependencies-{{ checksum "poetry.lock" }}
