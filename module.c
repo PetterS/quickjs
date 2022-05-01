@@ -29,7 +29,7 @@ typedef struct {
 	// NULL-terminated doubly linked list of callable Python objects that we need to keep track of.
 	// We need to store references to callables in a place where we can access them when running
 	// Python's GC. Having them stored only in QuickJS' function opaques would create a dependency
-	// cycle accross Python and QuickJS that neither GC can notice.
+	// cycle across Python and QuickJS that neither GC can notice.
 	PythonCallableNode *python_callables;
 } RuntimeData;
 
