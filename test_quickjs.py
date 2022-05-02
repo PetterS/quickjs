@@ -163,6 +163,8 @@ class Context(unittest.TestCase):
         self.context.set("f", self.context.globalThis)
         self.assertTrue(isinstance(self.context.globalThis, quickjs.Object))
         self.assertTrue(self.context.eval("f === globalThis"))
+        with self.assertRaises(AttributeError):
+            self.context.globalThis = 1
 
 
 class CallIntoPython(unittest.TestCase):
@@ -550,6 +552,8 @@ class FunctionTest(unittest.TestCase):
             }
         """)
         self.assertTrue(isinstance(f.globalThis, quickjs.Object))
+        with self.assertRaises(AttributeError):
+            f.globalThis = 1
 
 
 class JavascriptFeatures(unittest.TestCase):
