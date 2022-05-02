@@ -745,6 +745,15 @@ static PyObject *runtime_add_callable(RuntimeData *self, PyObject *args) {
 	}
 }
 
+
+// _quickjs.Context.globalThis
+//
+// Global object of the JS context.
+static PyObject *runtime_global_this(RuntimeData *self, void *closure) {
+	return quickjs_to_python(self, JS_GetGlobalObject(self->context));
+}
+
+
 // All methods of the _quickjs.Context class.
 static PyMethodDef runtime_methods[] = {
     {"eval", (PyCFunction)runtime_eval, METH_VARARGS, "Evaluates a Javascript string."},
@@ -774,6 +783,12 @@ static PyMethodDef runtime_methods[] = {
     {NULL} /* Sentinel */
 };
 
+// All getsetters (properties) of the _quickjs.Context class.
+static PyGetSetDef runtime_getsetters[] = {
+    {"globalThis", (getter)runtime_global_this, NULL, "Global object of the context.", NULL},
+    {NULL} /* Sentinel */
+};
+
 // Define the _quickjs.Context type.
 static PyTypeObject Context = {PyVarObject_HEAD_INIT(NULL, 0).tp_name = "_quickjs.Context",
                                .tp_doc = "Quickjs context",
@@ -784,7 +799,8 @@ static PyTypeObject Context = {PyVarObject_HEAD_INIT(NULL, 0).tp_name = "_quickj
                                .tp_clear = (inquiry)runtime_clear,
                                .tp_new = runtime_new,
                                .tp_dealloc = (destructor)runtime_dealloc,
-                               .tp_methods = runtime_methods};
+                               .tp_methods = runtime_methods,
+                               .tp_getset = runtime_getsetters};
 
 // All global methods in _quickjs.
 static PyMethodDef myextension_methods[] = {{"test", (PyCFunction)test, METH_NOARGS, NULL},
