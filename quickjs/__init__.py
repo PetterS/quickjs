@@ -77,6 +77,11 @@ class Function:
         with self._lock:
             return self._context.execute_pending_job()
 
+    @property
+    def globalThis(self) -> Object:
+        with self._lock:
+            return self._context.globalThis
+
     def _compile(self, name: str, code: str) -> Tuple[Context, Object]:
         context = Context()
         context.eval(code)

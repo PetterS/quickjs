@@ -159,6 +159,11 @@ class Context(unittest.TestCase):
         self.assertEqual(self.context.eval("obj.x"), 1)
         self.assertEqual(self.context.execute_pending_job(), False)
 
+    def test_global(self):
+        self.context.set("f", self.context.globalThis)
+        self.assertTrue(isinstance(self.context.globalThis, quickjs.Object))
+        self.assertTrue(self.context.eval("f === globalThis"))
+
 
 class CallIntoPython(unittest.TestCase):
     def setUp(self):
@@ -537,6 +542,14 @@ class FunctionTest(unittest.TestCase):
         self.assertEqual(f.execute_pending_job(), True)
         self.assertEqual(f(), 2)
         self.assertEqual(f.execute_pending_job(), False)
+
+    def test_global(self):
+        f = quickjs.Function(
+            "f", """
+            function f() {
+            }
+        """)
+        self.assertTrue(isinstance(f.globalThis, quickjs.Object))
 
 
 class JavascriptFeatures(unittest.TestCase):
