@@ -46,6 +46,6 @@ The `Function` class has, apart from being a callable, additional methods:
 For full functionality, please see `test_quickjs.py`
 
 # Developing
-This project uses a git submodule for the upstream code, so clone it with the `--recurse-submodules` option.
+This project uses a git submodule for the upstream code, so clone it with the `--recurse-submodules` option or run `git submodule update --init --recursive` afterwards.
 
 Use a `poetry shell` and `make test` should work from inside its virtual environment.
