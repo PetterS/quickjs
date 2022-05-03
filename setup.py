@@ -68,6 +68,8 @@ to the same JS runtime comes from the same thead.
 
 setup(author="Petter Strandmark",
       author_email="petter.strandmark@gmail.com",
+      maintainer="Quentin Wenger",
+      maintainer_email="matpi@protonmail.ch",
       name='quickjs',
       url='https://github.com/PetterS/quickjs',
       version='1.19.0',
