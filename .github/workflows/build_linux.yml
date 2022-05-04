@@ -23,8 +23,6 @@ jobs:
           - [3, 10]
     container:
       image: quay.io/pypa/${{ matrix.image-name }}_${{ matrix.image-arch }}
-      env:
-        PYTHON_VERSION: ${{ matrix.py-version[0] }}.${{ matrix.py-version[1] }}
     steps:
       - uses: actions/checkout@v3
         with:
