@@ -5,29 +5,27 @@ on:
 #  - create
 #    ref_type: tag
 
-defaults:
-  runs-on: ubuntu-latest
-  strategy:
-    matrix:
-      py-version:
-        - [3, 7]
-        - [3, 8]
-        - [3, 9]
-        - [3, 10]
-      image-name:
-        - manylinux1
-        - manylinux2010
-        - manylinux2014
-        - manylinux_2_24
-        - manylinux_2_28
-        - musllinux_1_1
-      image-arch:
-        - [x86_64, 1]
-        - [aarch64, 1]
-        - [i686, 0]
-
 jobs:
   job1:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        py-version:
+          - [3, 7]
+          - [3, 8]
+          - [3, 9]
+          - [3, 10]
+        image-name:
+          - manylinux1
+          - manylinux2010
+          - manylinux2014
+          - manylinux_2_24
+          - manylinux_2_28
+          - musllinux_1_1
+        image-arch:
+          - [x86_64, 1]
+          - [aarch64, 1]
+          - [i686, 0]
     container:
       image: quay.io/pypa/${{ matrix.image-name }}_${{ matrix.image-arch[0] }}
       env:
