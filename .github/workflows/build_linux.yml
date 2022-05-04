@@ -20,14 +20,13 @@ jobs:
           - manylinux2014
           - manylinux_2_24
         image-arch:
-          - [x86_64, 1]
+          - x86_64
     container:
-      image: quay.io/pypa/${{ matrix.image-name }}_${{ matrix.image-arch[0] }}
+      image: quay.io/pypa/${{ matrix.image-name }}_${{ matrix.image-arch }}
       env:
         PYTHON_VERSION: ${{ matrix.py-version[0] }}.${{ matrix.py-version[1] }}
-        IS_64: ${{ matrix.image-arch[1] }}
     steps:
       - uses: actions/checkout@v3
         with:
           submodules: true
-      - run: bash ci_build.sh
+      - run: make test
