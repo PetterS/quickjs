@@ -5,6 +5,13 @@ on:
 #  - create
 #    ref_type: tag
 
+env:
+  py-versions:
+    - [3, 7]
+    - [3, 8]
+    - [3, 9]
+    - [3, 10]
+
 jobs:
   job1:
     runs-on: ubuntu-latest
@@ -16,13 +23,12 @@ jobs:
           - manylinux_2_24
         image-arch:
           - x86_64
-        py-version:
-          - [3, 7]
-          - [3, 8]
-          - [3, 9]
-          - [3, 10]
+        py-version: ${{ py-versions }}
+    env:
+      image-name-full: ${{ matrix.image-name }}_${{ matrix.image-arch }}
+      py-version-str: ${{ matrix.py-version[0] }}.${{ matrix.py-version[1] }}
     container:
-      image: quay.io/pypa/${{ matrix.image-name }}_${{ matrix.image-arch }}
+      image: quay.io/pypa/${{ env.image-name-full }}
     steps:
       - uses: actions/checkout@v3
         with:
@@ -36,10 +42,10 @@ jobs:
           path: |
             ./.venv
             ~/.cache/pypoetry
-          key: ${{ matrix.image-name }}_${{ matrix.image-arch }}-py${{ matrix.py-version[0] }}.${{ matrix.py-version[1] }}-po${{ steps.poetry-version.outputs.v }}-lock${{ hashFiles('poetry.lock') }}
+          key: ${{ env.image-name-full }}-py${{ env.py-version-str }}-po${{ steps.poetry-version.outputs.v }}-lock${{ hashFiles('poetry.lock') }}
       - run: poetry config --local virtualenvs.in-project true
         if: steps.cache-poetry.outputs.cache-hit != 'true'
-      - run: poetry env use python${{ matrix.py-version[0] }}.${{ matrix.py-version[1] }}
+      - run: poetry env use python${{ env.py-version-str }}
         if: steps.cache-poetry.outputs.cache-hit != 'true'
       - run: poetry install
         if: steps.cache-poetry.outputs.cache-hit != 'true'
