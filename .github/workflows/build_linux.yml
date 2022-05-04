@@ -19,7 +19,6 @@ jobs:
         image-name:
           - manylinux2014
           - manylinux_2_24
-          - musllinux_1_1
         image-arch:
           - [x86_64, 1]
     container:
