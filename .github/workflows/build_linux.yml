@@ -11,16 +11,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        py-version:
-          - [3, 7]
-          - [3, 8]
-          - [3, 9]
-          - [3, 10]
         image-name:
           - manylinux2014
           - manylinux_2_24
         image-arch:
           - x86_64
+        py-version:
+          - [3, 7]
+          - [3, 8]
+          - [3, 9]
+          - [3, 10]
     container:
       image: quay.io/pypa/${{ matrix.image-name }}_${{ matrix.image-arch }}
       env:
@@ -30,6 +30,19 @@ jobs:
         with:
           submodules: true
       - run: pipx install poetry
+      - run: ::set-output name=v::$(poetry --version | cut -d " " -f3)
+        id: poetry-version
+      - uses: actions/cache@v3
+        id: cache-poetry
+        with:
+          path:
+            - ./.venv
+            - ~/.cache/pypoetry
+          key: ${{ matrix.image-name }}_${{ matrix.image-arch }}-py${{ matrix.py-version[0] }}.${{ matrix.py-version[1] }}-po${{ steps.poetry-version.outputs.v }}-lock${{ hashFiles("poetry.lock") }}
+      - run: poetry config --local virtualenvs.in-project true
+        if: steps.cache-poetry.outputs.cache-hit != "true"
       - run: poetry env use python${{ matrix.py-version[0] }}.${{ matrix.py-version[1] }}
+        if: steps.cache-poetry.outputs.cache-hit != "true"
       - run: poetry install
+        if: steps.cache-poetry.outputs.cache-hit != "true"
       - run: make test
