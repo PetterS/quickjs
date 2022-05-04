@@ -29,4 +29,7 @@ jobs:
       - uses: actions/checkout@v3
         with:
           submodules: true
+      - run: pip${{ matrix.py-version[0] }} install poetry
+      - run: poetry config --local virtualenvs.in-project true
+      - run: poetry install
       - run: make test
