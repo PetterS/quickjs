@@ -35,9 +35,9 @@ jobs:
       - uses: actions/cache@v3
         id: cache-poetry
         with:
-          path:
-            - ./.venv
-            - ~/.cache/pypoetry
+          path: |
+            ./.venv
+            ~/.cache/pypoetry
           key: ${{ matrix.image-name }}_${{ matrix.image-arch }}-py${{ matrix.py-version[0] }}.${{ matrix.py-version[1] }}-po${{ steps.poetry-version.outputs.v }}-lock${{ hashFiles("poetry.lock") }}
       - run: poetry config --local virtualenvs.in-project true
         if: steps.cache-poetry.outputs.cache-hit != "true"
