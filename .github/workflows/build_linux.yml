@@ -28,7 +28,7 @@ jobs:
         with:
           submodules: true
       - run: pipx install poetry
-      - run: echo "::set-output name=v::$(poetry --version | cut -d ' ' -f3)"
+      - run: echo "::set-output name=v::$(poetry --version | cut -d' ' -f3)"
         id: poetry-version
       - uses: actions/cache@v3
         id: cache-poetry
