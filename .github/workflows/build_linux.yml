@@ -25,11 +25,6 @@ defaults:
         - [x86_64, 1]
         - [aarch64, 1]
         - [i686, 0]
-  steps:
-    - uses: actions/checkout@v3
-      with:
-        submodules: true
-    - run: bash ci_build.sh
 
 jobs:
   job1:
@@ -38,3 +33,8 @@ jobs:
       env:
         PYTHON_VERSION: ${{ matrix.py-version[0] }}.${{ matrix.py-version[1] }}
         IS_64: ${{ matrix.image-arch[1] }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+      - run: bash ci_build.sh
