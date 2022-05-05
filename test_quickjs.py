@@ -540,6 +540,7 @@ class FunctionTest(unittest.TestCase):
         """)
         self.assertEqual(f(), 0)
         self.assertEqual(f.execute_pending_job(), True)
+        self.assertEqual(f(), 1)
         self.assertEqual(f.execute_pending_job(), True)
         self.assertEqual(f(), 2)
         self.assertEqual(f.execute_pending_job(), False)
