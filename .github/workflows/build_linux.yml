@@ -15,7 +15,7 @@ jobs:
           - manylinux_2_24
         image-arch:
           - x86_64
-        py-version: &py-versions
+        py-version:
           - [3, 7]
           - [3, 8]
           - [3, 9]
@@ -54,7 +54,11 @@ jobs:
         arch:
           - macos-11
           - macos-12
-        py-version: *py-versions
+        py-version:
+          - [3, 7]
+          - [3, 8]
+          - [3, 9]
+          - [3, 10]
     runs-on: ${{ matrix.arch }}
     env:
       py-version-str: ${{ matrix.py-version[0] }}.${{ matrix.py-version[1] }}
