@@ -127,5 +127,5 @@ jobs:
         if: steps.cache-poetry.outputs.cache-hit != 'true'
       - run: poetry install
         if: steps.cache-poetry.outputs.cache-hit != 'true'
-      - run: poetry run python setup.py build -c mingw32
+      - run: poetry run python setup.py build_ext --inplace -c mingw32
       - run: poetry run python -X dev -m unittest
