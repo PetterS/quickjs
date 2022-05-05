@@ -1,20 +1,12 @@
-name: Build for GNU/Linux targets
+name: Test and build
 
 on:
   - push
 #  - create
 #    ref_type: tag
 
-env:
-  py_versions:
-    - [3, 7]
-    - [3, 8]
-    - [3, 9]
-    - [3, 10]
-
 jobs:
-  job1:
-    runs-on: ubuntu-latest
+  build-linux:
     strategy:
       fail-fast: false
       matrix:
@@ -23,7 +15,12 @@ jobs:
           - manylinux_2_24
         image-arch:
           - x86_64
-        py-version: ${{ py_versions }}
+        py-version: &py-versions
+          - [3, 7]
+          - [3, 8]
+          - [3, 9]
+          - [3, 10]
+    runs-on: ubuntu-latest
     env:
       image-name-full: ${{ matrix.image-name }}_${{ matrix.image-arch }}
       py-version-str: ${{ matrix.py-version[0] }}.${{ matrix.py-version[1] }}
@@ -43,6 +40,41 @@ jobs:
             ./.venv
             ~/.cache/pypoetry
           key: ${{ env.image-name-full }}-py${{ env.py-version-str }}-po${{ steps.poetry-version.outputs.v }}-lock${{ hashFiles('poetry.lock') }}
+      - run: poetry config --local virtualenvs.in-project true
+        if: steps.cache-poetry.outputs.cache-hit != 'true'
+      - run: poetry env use python${{ env.py-version-str }}
+        if: steps.cache-poetry.outputs.cache-hit != 'true'
+      - run: poetry install
+        if: steps.cache-poetry.outputs.cache-hit != 'true'
+      - run: make test
+  build-macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - macos-11
+          - macos-12
+        py-version: *py-versions
+    runs-on: ${{ matrix.arch }}
+    env:
+      py-version-str: ${{ matrix.py-version[0] }}.${{ matrix.py-version[1] }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+      - uses: actions/setup-python@v3
+        with:
+          python-version: ${{ py-version-str }}
+      - run: pip install poetry
+      - run: echo "::set-output name=v::$(poetry --version | cut -d' ' -f3)"
+        id: poetry-version
+      - uses: actions/cache@v3
+        id: cache-poetry
+        with:
+          path: |
+            ./.venv
+            ~/.cache/pypoetry
+          key: ${{ matrix.arch }}-py${{ env.py-version-str }}-po${{ steps.poetry-version.outputs.v }}-lock${{ hashFiles('poetry.lock') }}
       - run: poetry config --local virtualenvs.in-project true
         if: steps.cache-poetry.outputs.cache-hit != 'true'
       - run: poetry env use python${{ env.py-version-str }}
