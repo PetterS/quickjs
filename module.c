@@ -82,6 +82,7 @@ static void prepare_call_js(RuntimeData *runtime_data) {
 	// We release the GIL in order to speed things up for certain use cases.
 	assert(!runtime_data->thread_state);
 	runtime_data->thread_state = PyEval_SaveThread();
+	JS_UpdateStackTop(runtime_data->runtime);
 	setup_time_limit(runtime_data, &runtime_data->interrupt_data);
 }
 
