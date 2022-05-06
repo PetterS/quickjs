@@ -116,15 +116,13 @@ jobs:
       - run: pip install poetry
       - run: echo "::set-output name=v::$(poetry --version | cut -d' ' -f3)"
         id: poetry-version
+      - run: poetry config --local virtualenvs.in-project true
       - uses: actions/cache@v3
         id: cache-poetry
         with:
           path: |
             ./.venv
-            ~/.cache/pypoetry
           key: ${{ matrix.arch }}-py${{ matrix.py-version[0] }}.${{ matrix.py-version[1] }}-po${{ steps.poetry-version.outputs.v }}-lock${{ hashFiles('poetry.lock') }}
-      - run: poetry config --local virtualenvs.in-project true
-        if: steps.cache-poetry.outputs.cache-hit != 'true'
       - run: poetry install
         if: steps.cache-poetry.outputs.cache-hit != 'true'
       - run: poetry run python setup.py build_ext --inplace -c mingw32
