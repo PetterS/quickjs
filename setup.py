@@ -43,6 +43,7 @@ def get_c_sources(include_headers=False):
             "upstream-quickjs/quickjs-atom.h",
             "upstream-quickjs/quickjs-opcode.h",
             "upstream-quickjs/quickjs.h",
+            "upstream-quickjs/VERSION",
         ]
     return sources
 
