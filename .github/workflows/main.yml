@@ -10,7 +10,15 @@ env:
     [[3, 7], [3, 8], [3, 9], [3, 10]]
 
 jobs:
+  pass-env:
+    runs-on: ubuntu-latest
+    outputs:
+      py-versions-str: ${{ steps.set-env.outputs.py-versions-str }}
+    steps:
+      - id: set-env
+        run: echo "::set-output name=py-versions-str::${{ env.PY_VERSIONS_STR }}"
   build-linux:
+    needs: pass-env
     strategy:
       fail-fast: false
       matrix:
@@ -19,7 +27,7 @@ jobs:
           - manylinux_2_24
         image-arch:
           - x86_64
-        py-version: ${{ fromJSON(env.PY_VERSIONS_STR) }}
+        py-version: ${{ fromJSON(needs.pass-env.outputs.py-versions-str) }}
     runs-on: ubuntu-latest
     container:
       image: quay.io/pypa/${{ matrix.image-name }}_${{ matrix.image-arch }}
@@ -45,13 +53,14 @@ jobs:
         if: steps.cache-poetry.outputs.cache-hit != 'true'
       - run: make test
   build-macos:
+    needs: pass-env
     strategy:
       fail-fast: false
       matrix:
         arch:
           - macos-10.15
           - macos-11
-        py-version: ${{ fromJSON(env.PY_VERSIONS_STR) }}
+        py-version: ${{ fromJSON(needs.pass-env.outputs.py-versions-str) }}
     runs-on: ${{ matrix.arch }}
     steps:
       - uses: actions/checkout@v3
@@ -78,12 +87,13 @@ jobs:
         if: steps.cache-poetry.outputs.cache-hit != 'true'
       - run: make test
   build-windows:
+    needs: pass-env
     strategy:
       fail-fast: false
       matrix:
         arch:
           - windows-2019
-        py-version: ${{ fromJSON(env.PY_VERSIONS_STR) }}
+        py-version: ${{ fromJSON(needs.pass-env.outputs.py-versions-str) }}
     runs-on: ${{ matrix.arch }}
     steps:
       - uses: actions/checkout@v3
