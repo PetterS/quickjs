@@ -9,7 +9,7 @@ env:
   PY_VERSIONS_STR: >-
     ["3.7", "3.8", "3.9", "3.10"]
   VERSIONS_LINUX_STR: >-
-    ["3.7", "manylinux_2_24"]
+    ["3.7", "3.8"]
   VERSIONS_MACOS_STR: >-
     ["macos-10.15", "macos-11"]
   VERSIONS_WINDOWS_STR: >-
