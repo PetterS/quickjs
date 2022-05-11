@@ -27,8 +27,8 @@ jobs:
     steps:
       - id: set-env
         run: |
-          echo "::set-output name=py-versions-str::${{ env.PY_VERSIONS_STR }}"
-          echo "::set-output name=versions-linux-str::${{ env.VERSIONS_LINUX_STR }}"
+          echo "::set-output name=py-versions-str::${{ toJSON(env.PY_VERSIONS_STR) }}"
+          echo "::set-output name=versions-linux-str::${{ toJSON(env.VERSIONS_LINUX_STR) }}"
       - id: set-env3
         run: |
           echo "::set-output name=versions-macos-str::${{ env.VERSIONS_MACOS_STR }}"
@@ -40,10 +40,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image-name: ${{ needs.pass-env.outputs.versions-linux-str }}
+        image-name: ${{ fromJSON(needs.pass-env.outputs.versions-linux-str) }}
         image-arch:
           - x86_64
-        py-version: ${{ needs.pass-env.outputs.py-versions-str }}
+        py-version: ${{ fromJSON(needs.pass-env.outputs.py-versions-str) }}
     runs-on: ubuntu-latest
     container:
       image: quay.io/pypa/${{ matrix.image-name }}_${{ matrix.image-arch }}
