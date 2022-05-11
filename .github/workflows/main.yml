@@ -27,10 +27,10 @@ jobs:
     steps:
       - id: set-env
         run: |
-          echo "::set-output name=py-versions-str::${{ env.PY_VERSIONS_STR }}"
-          echo "::set-output name=versions-linux-str::${{ env.VERSIONS_LINUX_STR }}"
-          echo "::set-output name=versions-macos-str::${{ env.VERSIONS_MACOS_STR }}"
-          echo "::set-output name=versions-windows-str::${{ env.VERSIONS_WINDOWS_STR }}"
+          echo "::set-output name=py-versions-str::${{ env.PY_VERSIONS_STR }}";
+          echo "::set-output name=versions-linux-str::${{ env.VERSIONS_LINUX_STR }}";
+          echo "::set-output name=versions-macos-str::${{ env.VERSIONS_MACOS_STR }}";
+          echo "::set-output name=versions-windows-str::${{ env.VERSIONS_WINDOWS_STR }}";
   build-linux:
     needs: pass-env
     strategy:
