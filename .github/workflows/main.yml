@@ -22,19 +22,15 @@ jobs:
     outputs:
       py-versions-str: ${{ steps.set-env.outputs.py-versions-str }}
       versions-linux-str: ${{ steps.set-env.outputs.versions-linux-str }}
-      versions-macos-str: ${{ steps.set-env3.outputs.versions-macos-str }}
-      versions-windows-str: ${{ steps.set-env4.outputs.versions-windows-str }}
+      versions-macos-str: ${{ steps.set-env.outputs.versions-macos-str }}
+      versions-windows-str: ${{ steps.set-env.outputs.versions-windows-str }}
     steps:
       - id: set-env
         run: |
           echo "::set-output name=py-versions-str::${{ toJSON(env.PY_VERSIONS_STR) }}"
           echo "::set-output name=versions-linux-str::${{ toJSON(env.VERSIONS_LINUX_STR) }}"
-      - id: set-env3
-        run: |
-          echo "::set-output name=versions-macos-str::${{ env.VERSIONS_MACOS_STR }}"
-      - id: set-env4
-        run: |
-          echo "::set-output name=versions-windows-str::${{ env.VERSIONS_WINDOWS_STR }}"
+          echo "::set-output name=versions-macos-str::${{ toJSON(env.VERSIONS_MACOS_STR) }}"
+          echo "::set-output name=versions-windows-str::${{ toJSON(env.VERSIONS_WINDOWS_STR) }}"
   build-linux:
     needs: pass-env
     strategy:
