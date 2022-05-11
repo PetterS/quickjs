@@ -135,5 +135,4 @@ jobs:
           key: ${{ matrix.arch }}-py${{ matrix.py-version }}-po${{ steps.poetry-version.outputs.v }}-lock${{ hashFiles('poetry.lock') }}
       - run: poetry install
         if: steps.cache-poetry.outputs.cache-hit != 'true'
-      - run: poetry run python setup.py build_ext --inplace -c mingw32
-      - run: poetry run python -X dev -m unittest
+      - run: make test
