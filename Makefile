@@ -16,19 +16,17 @@ format:
 	poetry run python -m yapf -i -r --style .style.yapf *.py
 	clang-format-7 -i module.c
 
-distribute: test
+distribute-source: test
 	rm -rf dist/
-	@echo "Now build the wheel for Windows in the dist/ folder."
-	@echo "       poetry run python setup.py build -c mingw32"
-	@echo "       poetry run python setup.py bdist_wheel --skip-build"
-	@echo "Press enter to continue when done..."
-	@read _
 	poetry run python setup.py sdist
 
-upload-test: distribute
+distribute-binary: test
+	poetry run python setup.py bdist_wheel --skip-build
+
+upload-test:
 	poetry run python -m twine upload -r testpypi dist/*
 
-upload: distribute
+upload:
 	poetry run python -m twine upload dist/*
 
 clean:
