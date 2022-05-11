@@ -22,7 +22,7 @@ distribute: test
 	poetry run python setup.py sdist
 
 upload-test: distribute
-	poetry run python -m twine upload --repository-url https://test.pypi.org/legacy/ dist/*
+	poetry run python -m twine upload -r testpypi dist/*
 
 upload: distribute
 	poetry run python -m twine upload dist/*
