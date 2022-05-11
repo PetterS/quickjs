@@ -8,23 +8,35 @@ on:
 env:
   PY_VERSIONS_STR: >-
     ["3.7", "3.8", "3.9", "3.10"]
+  VERSIONS_LINUX_STR: >-
+    ["manylinux2014", "manylinux_2_24"]
+  VERSIONS_MACOS_STR: >-
+    ["macos-10.15", "macos-11"]
+  VERSIONS_WINDOWS_STR: >-
+    ["windows-2019"]
+
 
 jobs:
   pass-env:
     runs-on: ubuntu-latest
     outputs:
       py-versions-str: ${{ steps.set-env.outputs.py-versions-str }}
+      versions-linux-str: ${{ steps.set-env.outputs.versions-linux-str }}
+      versions-macos-str: ${{ steps.set-env.outputs.versions-macos-str }}
+      versions-windows-str: ${{ steps.set-env.outputs.versions-windows-str }}
     steps:
       - id: set-env
-        run: echo "::set-output name=py-versions-str::${{ env.PY_VERSIONS_STR }}"
+        run: |
+          echo "::set-output name=py-versions-str::${{ env.PY_VERSIONS_STR }}"
+          echo "::set-output name=versions-linux-str::${{ env.VERSIONS_LINUX_STR }}"
+          echo "::set-output name=versions-macos-str::${{ env.VERSIONS_MACOS_STR }}"
+          echo "::set-output name=versions-windows-str::${{ env.VERSIONS_WINDOWS_STR }}"
   build-linux:
     needs: pass-env
     strategy:
       fail-fast: false
       matrix:
-        image-name:
-          - manylinux2014
-          - manylinux_2_24
+        image-name: ${{ fromJSON(needs.pass-env.outputs.versions-linux-str) }}
         image-arch:
           - x86_64
         py-version: ${{ fromJSON(needs.pass-env.outputs.py-versions-str) }}
@@ -57,9 +69,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch:
-          - macos-10.15
-          - macos-11
+        arch: ${{ fromJSON(needs.pass-env.outputs.versions-macos-str) }}
         py-version: ${{ fromJSON(needs.pass-env.outputs.py-versions-str) }}
     runs-on: ${{ matrix.arch }}
     steps:
@@ -91,8 +101,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch:
-          - windows-2019
+        arch: ${{ fromJSON(needs.pass-env.outputs.versions-windows-str) }}
         py-version: ${{ fromJSON(needs.pass-env.outputs.py-versions-str) }}
     runs-on: ${{ matrix.arch }}
     steps:
