@@ -21,16 +21,14 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       py-versions-str: ${{ steps.set-env.outputs.py-versions-str }}
-      versions-linux-str: ${{ steps.set-env2.outputs.versions-linux-str }}
+      versions-linux-str: ${{ steps.set-env.outputs.versions-linux-str }}
       versions-macos-str: ${{ steps.set-env3.outputs.versions-macos-str }}
       versions-windows-str: ${{ steps.set-env4.outputs.versions-windows-str }}
     steps:
       - id: set-env
         run: |
-          echo "::set-output name=py-versions-str::${{ toJSON(env.PY_VERSIONS_STR) }}"
-      - id: set-env2
-        run: |
-          echo "::set-output name=versions-linux-str::[\"manylinux2014\", \"manylinux_2_24\"]"
+          echo "::set-output name=py-versions-str::${{ env.PY_VERSIONS_STR }}"
+          echo "::set-output name=versions-linux-str::${{ env.VERSIONS_LINUX_STR }}"
       - id: set-env3
         run: |
           echo "::set-output name=versions-macos-str::${{ env.VERSIONS_MACOS_STR }}"
@@ -42,10 +40,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image-name: ${{ fromJSON(needs.pass-env.outputs.versions-linux-str) }}
+        image-name: ${{ needs.pass-env.outputs.versions-linux-str }}
         image-arch:
           - x86_64
-        py-version: ${{ fromJSON(needs.pass-env.outputs.py-versions-str) }}
+        py-version: ${{ needs.pass-env.outputs.py-versions-str }}
     runs-on: ubuntu-latest
     container:
       image: quay.io/pypa/${{ matrix.image-name }}_${{ matrix.image-arch }}
