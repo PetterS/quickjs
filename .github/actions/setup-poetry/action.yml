@@ -28,7 +28,7 @@ runs:
       id: cache-poetry
       with:
         path: .venv
-        key: ${{ key-base }}-po${{ steps.poetry-version.outputs.v }}-lock${{ hashFiles('poetry.lock') }}
+        key: ${{ inputs.key-base }}-po${{ steps.poetry-version.outputs.v }}-lock${{ hashFiles('poetry.lock') }}
     - run: poetry env use python${{ inputs.specific-python-version }}
       shell: bash
       if: inputs.use-specific-python-version == 'true' && steps.cache-poetry.outputs.cache-hit != 'true'

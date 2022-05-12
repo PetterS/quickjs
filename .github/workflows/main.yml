@@ -89,14 +89,13 @@ jobs:
           submodules: true
       - uses: ./.github/actions/setup-mingw
         with:
-          arch: ${{ matrix.arch }}
-          py-version: ${{ matrix.py-version }}
+          key-base: ${{ matrix.arch }}-py${{ matrix.py-version }}
       - uses: actions/setup-python@v3
         with:
           python-version: ${{ matrix.py-version }}
       - uses: ./.github/actions/setup-poetry
         with:
-          arch: ${{ matrix.arch }}
-          py-version: ${{ matrix.py-version }}
+          key-base: ${{ matrix.arch }}-py${{ matrix.py-version }}
+          use-pipx: false
           use-specific-python-version: false
       - run: make test

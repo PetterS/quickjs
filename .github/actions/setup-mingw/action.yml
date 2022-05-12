@@ -1,9 +1,7 @@
 name: "Setup MinGW"
 
 inputs:
-  arch:
-    required: true
-  py-version:
+  key-base:
     required: true
 
 runs:
@@ -13,7 +11,7 @@ runs:
       id: cache-mingw
       with:
         path: mingw
-        key: ${{ inputs.arch }}-py${{ inputs.py-version }}-mingw${{ hashFiles('mingw') }}
+        key: ${{ inputs.key-base }}-mingw${{ hashFiles('mingw') }}
     - run: New-Item 'mingw' -ItemType Directory -Force | Out-Null
       shell: pwsh
       if: steps.cache-mingw.outputs.cache-hit != 'true'
