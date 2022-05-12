@@ -47,22 +47,12 @@ jobs:
       - uses: actions/checkout@v3
         with:
           submodules: true
-      - run: pipx install poetry
-      - run: echo "::set-output name=v::$(poetry --version | cut -d' ' -f3)"
-        id: poetry-version
-      - uses: actions/cache@v3
-        id: cache-poetry
+      - uses: ./github/actions/setup_poetry
         with:
-          path: |
-            ./.venv
-            ~/.cache/pypoetry
-          key: ${{ matrix.image-name }}_${{ matrix.image-arch }}-py${{ matrix.py-version }}-po${{ steps.poetry-version.outputs.v }}-lock${{ hashFiles('poetry.lock') }}
-      - run: poetry config --local virtualenvs.in-project true
-        if: steps.cache-poetry.outputs.cache-hit != 'true'
-      - run: poetry env use python${{ matrix.py-version }}
-        if: steps.cache-poetry.outputs.cache-hit != 'true'
-      - run: poetry install
-        if: steps.cache-poetry.outputs.cache-hit != 'true'
+          key-base: ${{ matrix.image-name }}_${{ matrix.image-arch }}-py${{ matrix.py-version }}
+          use-pipx: true
+          use-specific-python-version: true
+          specific-python-version: ${{ matrix.py-version }}
       - run: make test
   build-macos:
     needs: pass-env
@@ -79,22 +69,11 @@ jobs:
       - uses: actions/setup-python@v3
         with:
           python-version: ${{ matrix.py-version }}
-      - run: pip install poetry
-      - run: echo "::set-output name=v::$(poetry --version | cut -d' ' -f3)"
-        id: poetry-version
-      - uses: actions/cache@v3
-        id: cache-poetry
+      - uses: ./github/actions/setup_poetry
         with:
-          path: |
-            ./.venv
-            ~/.cache/pypoetry
-          key: ${{ matrix.arch }}-py${{ matrix.py-version }}-po${{ steps.poetry-version.outputs.v }}-lock${{ hashFiles('poetry.lock') }}
-      - run: poetry config --local virtualenvs.in-project true
-        if: steps.cache-poetry.outputs.cache-hit != 'true'
-      - run: poetry env use python${{ env.py-version-str }}
-        if: steps.cache-poetry.outputs.cache-hit != 'true'
-      - run: poetry install
-        if: steps.cache-poetry.outputs.cache-hit != 'true'
+          key-base: ${{ matrix.arch }}-py${{ matrix.py-version }}
+          use-pipx: false
+          use-specific-python-version: false
       - run: make test
   build-windows:
     needs: pass-env
@@ -108,31 +87,16 @@ jobs:
       - uses: actions/checkout@v3
         with:
           submodules: true
-      - uses: actions/cache@v3
-        id: cache-mingw
+      - uses: ./github/actions/setup_mingw
         with:
-          path: mingw
-          key: ${{ matrix.arch }}-py${{ matrix.py-version }}-mingw${{ hashFiles('mingw') }}
-      - run: New-Item 'mingw' -ItemType Directory -Force | Out-Null
-        if: steps.cache-mingw.outputs.cache-hit != 'true'
-      - run: (New-Object Net.WebClient).DownloadFile('https://github.com/brechtsanders/winlibs_mingw/releases/download/11.3.0-14.0.3-10.0.0-msvcrt-r3/winlibs-x86_64-posix-seh-gcc-11.3.0-mingw-w64msvcrt-10.0.0-r3.7z', 'mingw.7z')
-        if: steps.cache-mingw.outputs.cache-hit != 'true'
-      - run: 7z x 'mingw.7z' -o'mingw' -aoa
-        if: steps.cache-mingw.outputs.cache-hit != 'true'
-      - run: $env:PATH = 'mingw\\mingw64\\bin;' + $env:PATH
+          arch: ${{ matrix.arch }}
+          py-version: ${{ matrix.py-version }}
       - uses: actions/setup-python@v3
         with:
           python-version: ${{ matrix.py-version }}
-      - run: pip install poetry
-      - run: echo "::set-output name=v::$(poetry --version | cut -d' ' -f3)"
-        id: poetry-version
-      - run: poetry config --local virtualenvs.in-project true
-      - uses: actions/cache@v3
-        id: cache-poetry
+      - uses: ./github/actions/setup_poetry
         with:
-          path: |
-            ./.venv
-          key: ${{ matrix.arch }}-py${{ matrix.py-version }}-po${{ steps.poetry-version.outputs.v }}-lock${{ hashFiles('poetry.lock') }}
-      - run: poetry install
-        if: steps.cache-poetry.outputs.cache-hit != 'true'
+          arch: ${{ matrix.arch }}
+          py-version: ${{ matrix.py-version }}
+          use-specific-python-version: false
       - run: make test
