@@ -47,7 +47,7 @@ jobs:
       - uses: actions/checkout@v3
         with:
           submodules: true
-      - uses: ./github/actions/setup_poetry
+      - uses: .github/actions/setup_poetry
         with:
           key-base: ${{ matrix.image-name }}_${{ matrix.image-arch }}-py${{ matrix.py-version }}
           use-pipx: true
@@ -69,7 +69,7 @@ jobs:
       - uses: actions/setup-python@v3
         with:
           python-version: ${{ matrix.py-version }}
-      - uses: ./github/actions/setup_poetry
+      - uses: .github/actions/setup_poetry
         with:
           key-base: ${{ matrix.arch }}-py${{ matrix.py-version }}
           use-pipx: false
@@ -87,14 +87,14 @@ jobs:
       - uses: actions/checkout@v3
         with:
           submodules: true
-      - uses: ./github/actions/setup_mingw
+      - uses: .github/actions/setup_mingw
         with:
           arch: ${{ matrix.arch }}
           py-version: ${{ matrix.py-version }}
       - uses: actions/setup-python@v3
         with:
           python-version: ${{ matrix.py-version }}
-      - uses: ./github/actions/setup_poetry
+      - uses: .github/actions/setup_poetry
         with:
           arch: ${{ matrix.arch }}
           py-version: ${{ matrix.py-version }}
