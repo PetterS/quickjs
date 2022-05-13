@@ -65,6 +65,7 @@ jobs:
         with:
           make-binary: true
           repair-manylinux: true
+          manylinux-target: ${{ matrix.image-name}}_${{ matrix.image-arch }}
         if: ${{ fromJSON(needs.pass-env.outputs.is-from-tag-str) }}
   build-macos:
     needs: pass-env

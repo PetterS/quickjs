@@ -6,6 +6,8 @@ inputs:
   repair-manylinux:
     required: false
     default: false
+  manylinux-target:
+    required: false
 
 runs:
   using: "composite"
@@ -16,7 +18,7 @@ runs:
     - run: make distribute-source
       shell: bash
       if: inputs.make-binary == 'false'
-    - run: find dist/*.whl | xargs auditwheel repair
+    - run: find dist/*.whl | xargs auditwheel repair --plat=${{ inputs.manylinux-target }}
       shell: bash
       if: inputs.make-binary == 'true' && inputs.repair-manylinux == 'true'
     - uses: actions/upload-artifact@v2
