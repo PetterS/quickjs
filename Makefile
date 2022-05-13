@@ -6,25 +6,27 @@ install: build
 	poetry run python setup.py develop
 
 build: Makefile module.c upstream-quickjs/quickjs.c upstream-quickjs/quickjs.h
+ifeq ($(shell uname | head -c5), MINGW)
+	poetry run python setup.py build -c mingw32
+else
 	poetry run python setup.py build
+endif
 
 format:
 	poetry run python -m yapf -i -r --style .style.yapf *.py
 	clang-format-7 -i module.c
 
-distribute: test
+distribute-source: test
 	rm -rf dist/
-	@echo "Now build the wheel for Windows in the dist/ folder."
-	@echo "       poetry run python setup.py build -c mingw32"
-	@echo "       poetry run python setup.py bdist_wheel --skip-build"
-	@echo "Press enter to continue when done..."
-	@read _
 	poetry run python setup.py sdist
 
-upload-test: distribute
-	poetry run python -m twine upload --repository-url https://test.pypi.org/legacy/ dist/*
+distribute-binary: test
+	poetry run python setup.py bdist_wheel --skip-build
 
-upload: distribute
+upload-test:
+	poetry run python -m twine upload -r testpypi dist/*
+
+upload:
 	poetry run python -m twine upload dist/*
 
 clean:

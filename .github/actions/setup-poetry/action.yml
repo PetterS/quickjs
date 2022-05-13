@@ -1,0 +1,37 @@
+name: "Setup Poetry"
+
+inputs:
+  key-base:
+    required: true
+  use-pipx:
+    required: true
+  use-specific-python-version:
+    required: true
+  specific-python-version:
+    required: false
+
+runs:
+  using: "composite"
+  steps:
+    - run: pipx install poetry
+      shell: bash
+      if: inputs.use-pipx == 'true'
+    - run: pip install poetry
+      shell: bash
+      if: inputs.use-pipx == 'false'
+    - run: poetry config --local virtualenvs.in-project true
+      shell: bash
+    - run: echo "::set-output name=v::$(poetry --version | cut -d' ' -f3)"
+      shell: bash
+      id: poetry-version
+    - uses: actions/cache@v3
+      id: cache-poetry
+      with:
+        path: .venv
+        key: ${{ inputs.key-base }}-po${{ steps.poetry-version.outputs.v }}-lock${{ hashFiles('poetry.lock') }}
+    - run: poetry env use python${{ inputs.specific-python-version }}
+      shell: bash
+      if: inputs.use-specific-python-version == 'true' && steps.cache-poetry.outputs.cache-hit != 'true'
+    - run: poetry install
+      shell: bash
+      if: steps.cache-poetry.outputs.cache-hit != 'true'

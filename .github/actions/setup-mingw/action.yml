@@ -1,0 +1,25 @@
+name: "Setup MinGW"
+
+inputs:
+  key-base:
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/cache@v3
+      id: cache-mingw
+      with:
+        path: mingw
+        key: ${{ inputs.key-base }}-mingw${{ hashFiles('mingw') }}
+    - run: New-Item 'mingw' -ItemType Directory -Force | Out-Null
+      shell: pwsh
+      if: steps.cache-mingw.outputs.cache-hit != 'true'
+    - run: (New-Object Net.WebClient).DownloadFile('https://github.com/brechtsanders/winlibs_mingw/releases/download/11.3.0-14.0.3-10.0.0-msvcrt-r3/winlibs-x86_64-posix-seh-gcc-11.3.0-mingw-w64msvcrt-10.0.0-r3.7z', 'mingw.7z')
+      shell: pwsh
+      if: steps.cache-mingw.outputs.cache-hit != 'true'
+    - run: 7z x 'mingw.7z' -o'mingw' -aoa
+      shell: pwsh
+      if: steps.cache-mingw.outputs.cache-hit != 'true'
+    - run: $env:PATH = 'mingw\\mingw64\\bin;' + $env:PATH
+      shell: pwsh
