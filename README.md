@@ -4,10 +4,11 @@ Just install with
 
 	pip install quickjs
 
-Windows binaries are provided for:
- - 1.18.0 and later: None.
- - 1.5.1–1.17.0: Python 3.9, 64-bit.
- - 1.5.0 and earlier: Python 3.7, 64-bit.
+Binaries are provided for:
+ - 1.19.2 and later: Python 3.7-3.10, 64-bit for Windows, macOS and GNU/Linux.
+ - 1.18.0-1.19.1: None.
+ - 1.5.1–1.17.0: Python 3.9, 64-bit for Windows.
+ - 1.5.0 and earlier: Python 3.7, 64-bit for Windows.
 
 # Usage
 
