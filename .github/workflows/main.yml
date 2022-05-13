@@ -165,7 +165,16 @@ jobs:
           key-base: source_linux-py${{ fromJSON(needs.pass-env.outputs.py-versions-str)[0] }}
           use-pipx: false
           use-specific-python-version: false
-      - run: poetry run python -m twine upload -u__token__ -p${{ secrets.PYPI_API_TOKEN }} dist/*
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          user: __token__
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          packages_dir: dist/artifact/
         if: ${{ fromJSON(needs.pass-env.outputs.is-for-release-str) }}
-      - run: poetry run python -m twine upload -u__token__ -p${{ secrets.TESTPYPI_API_TOKEN }} -r testpypi dist/*
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          user: __token__
+          password: ${{ secrets.TESTPYPI_API_TOKEN }}
+          packages_dir: dist/artifact/
+          repository_url: https://test.pypi.org/legacy/
         if: ${{ !fromJSON(needs.pass-env.outputs.is-for-release-str) }}
