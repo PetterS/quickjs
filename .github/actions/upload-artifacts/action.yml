@@ -3,9 +3,9 @@ name: "Make and upload artifacts"
 inputs:
   make-binary:
     required: true
-  path:
+  repair-manylinux:
     required: false
-    default: dist/
+    default: false
 
 runs:
   using: "composite"
@@ -16,8 +16,17 @@ runs:
     - run: make distribute-source
       shell: bash
       if: inputs.make-binary == 'false'
+    - run: find dist/*.whl | auditwheel repair
+      shell: bash
+      if: inputs.make-binary == 'true' && inputs.repair-manylinux == 'true'
     - uses: actions/upload-artifact@v2
       with:
         path: |
-          ${{ inputs.path }}*.tar.gz
-          ${{ inputs.path }}*.whl
+          wheelhouse/*.whl
+      if: inputs.make-binary == 'true' && inputs.repair-manylinux == 'true'
+    - uses: actions/upload-artifact@v2
+      with:
+        path: |
+          dist/*.tar.gz
+          dist/*.whl
+      if: inputs.make-binary == 'false' || inputs.repair-manylinux == 'false'
