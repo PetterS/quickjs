@@ -61,9 +61,11 @@ jobs:
           use-specific-python-version: true
           specific-python-version: ${{ matrix.py-version }}
       - run: make test
+      - run: find dist/*.whl | auditwheel repair
       - uses: ./.github/actions/upload-artifacts
         with:
           make-binary: false
+          path: wheelhouse/
         if: ${{ fromJSON(needs.pass-env.outputs.is-from-tag-str) }}
   build-macos:
     needs: pass-env

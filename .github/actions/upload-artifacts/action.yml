@@ -3,6 +3,9 @@ name: "Make and upload artifacts"
 inputs:
   make-binary:
     required: true
+  path:
+    required: false
+    default: dist/
 
 runs:
   using: "composite"
@@ -16,5 +19,5 @@ runs:
     - uses: actions/upload-artifact@v2
       with:
         path: |
-          dist/*.tar.gz
-          dist/*.whl
+          ${{ inputs.path }}*.tar.gz
+          ${{ inputs.path }}*.whl
