@@ -63,7 +63,7 @@ jobs:
       - run: make test
       - uses: ./.github/actions/upload-artifacts
         with:
-          make-binary: false
+          make-binary: true
           repair-manylinux: true
         if: ${{ fromJSON(needs.pass-env.outputs.is-from-tag-str) }}
   build-macos:
@@ -89,7 +89,7 @@ jobs:
       - run: make test
       - uses: ./.github/actions/upload-artifacts
         with:
-          make-binary: false
+          make-binary: true
         if: ${{ fromJSON(needs.pass-env.outputs.is-from-tag-str) }}
   build-windows:
     needs: pass-env
@@ -117,7 +117,7 @@ jobs:
       - run: make test
       - uses: ./.github/actions/upload-artifacts
         with:
-          make-binary: false
+          make-binary: true
         if: ${{ fromJSON(needs.pass-env.outputs.is-from-tag-str) }}
   package-source:
     needs:
@@ -141,7 +141,7 @@ jobs:
           use-specific-python-version: false
       - uses: ./.github/actions/upload-artifacts
         with:
-          make-binary: true
+          make-binary: false
   upload-pypi:
     needs:
       - pass-env
