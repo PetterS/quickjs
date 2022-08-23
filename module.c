@@ -642,7 +642,7 @@ static PyObject *runtime_set_max_stack_size(RuntimeData *self, PyObject *args) {
 
 // _quickjs.Context.memory
 //
-// Sets the CPU time limit of the context. This will be used in an interrupt handler.
+// Returns the memory usage as a dict.
 static PyObject *runtime_memory(RuntimeData *self) {
 	PyObject *dict = PyDict_New();
 	if (dict == NULL) {
