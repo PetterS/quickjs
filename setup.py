@@ -1,4 +1,3 @@
-import glob
 import sys
 from typing import List
 
@@ -16,13 +15,13 @@ if sys.platform == "win32":
     #    system PATH when compiling.
     # 3. The code below will moneky-patch distutils to work.
     import distutils.cygwinccompiler
-    distutils.cygwinccompiler.get_msvcr = lambda: [] 
+    distutils.cygwinccompiler.get_msvcr = lambda: []  # type: ignore
     # Make sure that pthreads is linked statically, otherwise we run into problems
     # on computers where it is not installed.
     extra_link_args = ["-static"]
 
 
-def get_c_sources(include_headers=False):
+def get_c_sources(include_headers: bool = False):
     sources = [
         "module.c",
         "upstream-quickjs/cutils.c",
@@ -77,4 +76,9 @@ setup(author="Petter Strandmark",
       description='Wrapping the quickjs C library.',
       long_description=long_description,
       packages=["quickjs"],
-      ext_modules=[_quickjs])
+      ext_modules=[_quickjs],
+      package_data={
+          "": ["_quickjs.pyi"],
+          "quickjs": ["py.typed"]
+      },
+      include_package_data=True,)

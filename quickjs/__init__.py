@@ -1,7 +1,7 @@
 import concurrent.futures
 import json
 import threading
-from typing import Tuple, Callable
+from typing import Any, Tuple, Callable
 
 import _quickjs
 
@@ -21,8 +21,8 @@ class Function:
     # same runtime, even if it is not at the same time. So we run everything on the same thread in
     # order to prevent this.
     _threadpool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-    
-    def __init__(self, name: str, code: str, *, own_executor=False) -> None:
+
+    def __init__(self, name: str, code: str, *, own_executor: bool = False) -> None:
         """
         Arguments:
             name: The name of the function in the provided code that will be executed.
@@ -39,21 +39,21 @@ class Function:
         concurrent.futures.wait([future])
         self._context, self._f = future.result()
 
-    def __call__(self, *args, run_gc=True):
+    def __call__(self, *args: Any, run_gc: bool = True) -> Any:
         with self._lock:
             future = self._threadpool.submit(self._call, *args, run_gc=run_gc)
             concurrent.futures.wait([future])
             return future.result()
 
-    def set_memory_limit(self, limit):
+    def set_memory_limit(self, limit: int):
         with self._lock:
             return self._context.set_memory_limit(limit)
 
-    def set_time_limit(self, limit):
+    def set_time_limit(self, limit: int):
         with self._lock:
             return self._context.set_time_limit(limit)
 
-    def set_max_stack_size(self, limit):
+    def set_max_stack_size(self, limit: int):
         with self._lock:
             return self._context.set_max_stack_size(limit)
 
@@ -61,7 +61,7 @@ class Function:
         with self._lock:
             return self._context.memory()
 
-    def add_callable(self, global_name: str, callable: Callable) -> None:
+    def add_callable(self, global_name: str, callable: Callable[..., Any]) -> None:
         with self._lock:
             self._context.add_callable(global_name, callable)
 
@@ -86,10 +86,11 @@ class Function:
         context = Context()
         context.eval(code)
         f = context.get(name)
+        assert isinstance(f, Object)
         return context, f
 
-    def _call(self, *args, run_gc=True):
-        def convert_arg(arg):
+    def _call(self, *args: Any, run_gc: bool = True):
+        def convert_arg(arg: Any):
             if isinstance(arg, (type(None), str, bool, float, int)):
                 return arg
             else:
@@ -99,7 +100,7 @@ class Function:
         try:
             result = self._f(*[convert_arg(a) for a in args])
             if isinstance(result, Object):
-                result = json.loads(result.json())            
+                result = json.loads(result.json())
             return result
         finally:
             if run_gc:
