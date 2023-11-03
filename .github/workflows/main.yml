@@ -29,8 +29,6 @@ jobs:
       versions-windows-str: ${{ toJSON(env.VERSIONS_WINDOWS_STR) }}
       is-from-tag-str: ${{ toJSON(github.ref_type == 'tag') }}
       is-for-release-str: ${{ toJSON(!contains(github.ref_name, 'dev')) }}
-    steps:
-      - id: set-env
   build-linux:
     needs: pass-env
     strategy:
