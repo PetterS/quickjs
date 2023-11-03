@@ -21,7 +21,7 @@ runs:
       if: inputs.use-pipx == 'false'
     - run: poetry config --local virtualenvs.in-project true
       shell: bash
-    - run: echo "::set-output name=v::$(poetry --version | cut -d' ' -f3)"
+    - run: echo "v=$(poetry --version | cut -d' ' -f3 | cut -d')' -f1)" >> "$GITHUB_OUTPUT"
       shell: bash
       id: poetry-version
     - uses: actions/cache@v3
