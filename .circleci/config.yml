@@ -2,7 +2,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: cimg/python:3.8
+      - image: cimg/python:3.11
 
     working_directory: ~/repo
 
@@ -16,7 +16,7 @@ jobs:
 
       - restore_cache:
           keys:
-          - v1-3.8-dependencies-{{ checksum "poetry.lock" }}
+          - v1-3.11-dependencies-{{ checksum "poetry.lock" }}
 
       - run:
           name: Install dependencies
@@ -28,7 +28,7 @@ jobs:
           paths:
             - ./.venv
             - ~/.cache/pypoetry
-          key: v1-3.8-dependencies-{{ checksum "poetry.lock" }}
+          key: v1-3.11-dependencies-{{ checksum "poetry.lock" }}
 
       - run:
           name: Tests
