@@ -14,7 +14,7 @@ env:
   VERSIONS_LINUX_STR: >-
     ["manylinux2014", "manylinux_2_24"]
   VERSIONS_MACOS_STR: >-
-    ["macos-10.15", "macos-11"]
+    ["macos-11", "macos-12"]
   VERSIONS_WINDOWS_STR: >-
     ["windows-2019"]
 
