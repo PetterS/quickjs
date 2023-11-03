@@ -23,21 +23,12 @@ jobs:
   pass-env:
     runs-on: ubuntu-latest
     outputs:
-      py-versions-str: ${{ steps.set-env.outputs.py_versions_str }}
-      versions-linux-str: ${{ steps.set-env.outputs.versions_linux_str }}
-      versions-macos-str: ${{ steps.set-env.outputs.versions_macos_str }}
-      versions-windows-str: ${{ steps.set-env.outputs.versions_windows_str }}
-      is-from-tag-str: ${{ steps.set-env.outputs.is_from_tag_str }}
-      is-for-release-str: ${{ steps.set-env.outputs.is_for_release_str }}
-    steps:
-      - id: set-env
-        run: |
-          echo "py_versions_str=${{ toJSON(env.PY_VERSIONS_STR) }}" >> "$GITHUB_OUTPUT"
-          echo "versions_linux_str=${{ toJSON(env.VERSIONS_LINUX_STR) }}" >> "$GITHUB_OUTPUT"
-          echo "versions_macos_str=${{ toJSON(env.VERSIONS_MACOS_STR) }}" >> "$GITHUB_OUTPUT"
-          echo "versions_windows_str=${{ toJSON(env.VERSIONS_WINDOWS_STR) }}" >> "$GITHUB_OUTPUT"
-          echo "is_from_tag_str=${{ toJSON(github.ref_type == 'tag') }}" >> "$GITHUB_OUTPUT"
-          echo "is_for_release_str=${{ toJSON(!contains(github.ref_name, 'dev')) }}" >> "$GITHUB_OUTPUT"
+      py-versions-str: ${{ toJSON(env.PY_VERSIONS_STR) }}
+      versions-linux-str: ${{ toJSON(env.VERSIONS_LINUX_STR) }}
+      versions-macos-str: ${{ toJSON(env.VERSIONS_MACOS_STR) }}
+      versions-windows-str: ${{ toJSON(env.VERSIONS_WINDOWS_STR) }}
+      is-from-tag-str: ${{ toJSON(github.ref_type == 'tag') }}
+      is-for-release-str: ${{ toJSON(!contains(github.ref_name, 'dev')) }}
   build-linux:
     needs: pass-env
     strategy:
