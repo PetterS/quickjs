@@ -31,6 +31,7 @@ jobs:
       is-for-release-str: ${{ toJSON(!contains(github.ref_name, 'dev')) }}
     steps:
       - id: set-env
+        run: sleep 0
   build-linux:
     needs: pass-env
     strategy:
