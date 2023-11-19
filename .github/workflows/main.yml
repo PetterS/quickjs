@@ -10,13 +10,13 @@ on:
 
 env:
   PY_VERSIONS_STR: >-
-    ["3.8", "3.9", "3.10", "3.11"]
+    ["3.8", "3.9", "3.10", "3.11", "3.12"]
   VERSIONS_LINUX_STR: >-
-    ["manylinux2014", "manylinux_2_24"]
+    ["manylinux2014", "manylinux_2_28"]
   VERSIONS_MACOS_STR: >-
     ["macos-11", "macos-12"]
   VERSIONS_WINDOWS_STR: >-
-    ["windows-2019"]
+    ["windows-2022"]
 
 
 jobs:
