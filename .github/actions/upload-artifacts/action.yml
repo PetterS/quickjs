@@ -21,12 +21,12 @@ runs:
     - run: find dist/*.whl | xargs auditwheel repair --plat=${{ inputs.manylinux-target }}
       shell: bash
       if: inputs.make-binary == 'true' && inputs.repair-manylinux == 'true'
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v4
       with:
         path: |
           wheelhouse/*.whl
       if: inputs.make-binary == 'true' && inputs.repair-manylinux == 'true'
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v4
       with:
         path: |
           dist/*.tar.gz
