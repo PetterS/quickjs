@@ -24,7 +24,7 @@ runs:
     - run: echo "v=$(poetry --version | cut -d' ' -f3 | cut -d')' -f1)" >> "$GITHUB_OUTPUT"
       shell: bash
       id: poetry-version
-    - uses: actions/cache@v3
+    - uses: actions/cache@v4
       id: cache-poetry
       with:
         path: .venv
