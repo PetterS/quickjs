@@ -4,3 +4,4 @@ dist
 quickjs.egg-info
 *.so
 *.pyd
+/venv
