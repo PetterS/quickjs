@@ -1,3 +1,6 @@
+# Archived
+This repository has been **archived** due to lack of maintenance.
+
 [![CircleCI](https://circleci.com/gh/PetterS/quickjs.svg?style=svg)](https://circleci.com/gh/PetterS/quickjs) [![PyPI version fury.io](https://badge.fury.io/py/quickjs.svg)](https://pypi.python.org/pypi/quickjs/)
 
 Just install with
