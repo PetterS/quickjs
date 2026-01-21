@@ -15,8 +15,8 @@ if sys.platform == "win32":
     # 2. Put the bin/ folder inside x86_64-8.1.0-posix-seh-rt_v6-rev0 in your
     #    system PATH when compiling.
     # 3. The code below will moneky-patch distutils to work.
-    import distutils.cygwinccompiler
-    distutils.cygwinccompiler.get_msvcr = lambda: [] 
+    #import distutils.cygwinccompiler
+    #distutils.cygwinccompiler.get_msvcr = lambda: [] 
     # Make sure that pthreads is linked statically, otherwise we run into problems
     # on computers where it is not installed.
     extra_link_args = ["-static"]
